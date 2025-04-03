@@ -61,7 +61,13 @@ class PriceScraper(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("POE2工具")
+        
+        # 版本信息
+        self.current_version = "1.0.0"  # 确保在使用之前初始化
+        self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
+        
+        # 在窗口标题中添加版本号
+        self.setWindowTitle(f"POE2PriceAid v{self.current_version}")
         self.setMinimumSize(900, 350)  # 调整宽度到900
         
         # 设置深色主题
@@ -72,9 +78,7 @@ class MainWindow(QMainWindow):
         self.currency_names = {"divine": "神圣石", "exalted": "崇高石", "chaos": "混沌石"}
         self.currency_colors = {"divine": "#FFD700", "exalted": "#00BFFF", "chaos": "#FF6347"}
         
-        # 版本信息
-        self.current_version = "1.0.0"
-        self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
+        
         
         # 创建UI
         self.init_ui()
@@ -231,7 +235,7 @@ class MainWindow(QMainWindow):
         
         # 顶部标题和刷新按钮
         header_layout = QHBoxLayout()
-        title_label = QLabel("POE2 工具箱")
+        title_label = QLabel("POE2PriceAid")
         title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         header_layout.addWidget(title_label)
         
@@ -555,9 +559,9 @@ class MainWindow(QMainWindow):
                 # 如果是源代码运行
                 application_path = os.path.dirname(os.path.abspath(__file__))
             
-            # 创建临时目录
-            temp_dir = tempfile.mkdtemp()
-            temp_file = os.path.join(temp_dir, "new_version.exe")
+            # 创建临时目录 - 避免路径中有空格
+            temp_dir = tempfile.mkdtemp(prefix="poe2update_")
+            temp_file = os.path.join(temp_dir, "POE2PriceAid_new.exe")
             
             # 下载新版本
             def update_progress(count, block_size, total_size):
@@ -572,25 +576,30 @@ class MainWindow(QMainWindow):
             # 下载完成后关闭进度对话框
             progress_dialog.close()
             
-            # 创建更新批处理文件
+            # 创建更简单的更新批处理文件
             update_script = os.path.join(temp_dir, "update.bat")
             with open(update_script, "w") as f:
                 f.write(f"""@echo off
 echo 正在更新，请稍候...
-ping 127.0.0.1 -n 2 > nul
-del "{current_exe}"
-copy "{temp_file}" "{current_exe}"
+timeout /t 2 /nobreak > nul
+taskkill /F /IM POE2PriceAid.exe > nul 2>&1
+copy /Y "{temp_file}" "{current_exe}"
 start "" "{current_exe}"
 rmdir /S /Q "{temp_dir}"
 exit
 """)
             
-            # 执行更新脚本
-            QMessageBox.information(self, "更新准备就绪", "程序将关闭并安装更新，完成后会自动重启。")
-            subprocess.Popen([update_script], shell=True)
-            self.close()
-            sys.exit(0)
+            # 确认更新
+            reply = QMessageBox.question(self, "确认更新", 
+                                        "程序将关闭并安装更新，完成后会自动重启。是否继续？",
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             
+            if reply == QMessageBox.Yes:
+                # 执行更新脚本
+                subprocess.Popen([update_script], shell=True)
+                self.close()
+                sys.exit(0)
+        
         except Exception as e:
             QMessageBox.critical(self, "更新失败", f"更新过程中出错: {e}")
 

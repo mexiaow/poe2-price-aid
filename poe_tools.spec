@@ -4,7 +4,7 @@
 a = Analysis(
     ['poe_tools.py'],
     pathex=[],
-    binaries=[],
+    binaries=[('C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python310.dll', '.')],
     datas=[('price_scraper.py', '.')],
     hiddenimports=[],
     hookspath=[],
@@ -22,11 +22,11 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='poe_tools',
+    name='POE2PriceAid',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,
+    upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -35,4 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='app.ico',
 )

@@ -233,15 +233,33 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(main_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         
-        # 顶部标题和刷新按钮
+        # 顶部标题和按钮
         header_layout = QHBoxLayout()
+        
+        # 左侧标题
         title_label = QLabel("POE2PriceAid")
         title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         header_layout.addWidget(title_label)
         
+        # 添加弹性空间，将按钮推到右侧
+        header_layout.addStretch()
+        
+        # 右侧按钮组 - 使用水平布局将按钮放在一起
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(5)  # 设置按钮之间的间距
+        
+        # 刷新价格按钮
         refresh_button = QPushButton("刷新价格")
         refresh_button.clicked.connect(self.refresh_prices)
-        header_layout.addWidget(refresh_button, alignment=Qt.AlignRight)
+        buttons_layout.addWidget(refresh_button)
+        
+        # 检查更新按钮
+        check_update_button = QPushButton("检查更新")
+        check_update_button.clicked.connect(self.check_updates_manually)
+        buttons_layout.addWidget(check_update_button)
+        
+        # 将按钮组添加到标题栏
+        header_layout.addLayout(buttons_layout)
         
         main_layout.addLayout(header_layout)
         
@@ -490,26 +508,7 @@ class MainWindow(QMainWindow):
             timer.timeout.connect(status_dialog.show)
             timer.start(500)  # 如果500毫秒内完成检查，则不显示对话框
             
-            # 获取上次检查更新的时间
-            last_check_file = "last_update_check.txt"
-            now = datetime.now()
-            
-            # 如果文件存在，读取上次检查时间
-            if os.path.exists(last_check_file):
-                with open(last_check_file, "r") as f:
-                    last_check_str = f.read().strip()
-                    last_check = datetime.fromisoformat(last_check_str)
-                    
-                    # 如果距离上次检查不到12小时，跳过
-                    if (now - last_check).total_seconds() < 43200:  # 12小时 = 43200秒
-                        timer.stop()
-                        return
-            
-            # 更新上次检查时间
-            with open(last_check_file, "w") as f:
-                f.write(now.isoformat())
-            
-            # 发送请求获取最新版本信息
+            # 直接获取最新版本信息
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -585,7 +584,9 @@ class MainWindow(QMainWindow):
             
             # 创建临时目录 - 避免路径中有空格
             temp_dir = tempfile.mkdtemp(prefix="poe2update_")
-            temp_file = os.path.join(temp_dir, "POE2PriceAid_new.exe")
+            
+            # 下载更新包
+            zip_file = os.path.join(temp_dir, "update.zip")
             
             # 更新进度对话框文本
             progress_dialog.setLabelText("正在下载更新...")
@@ -599,21 +600,33 @@ class MainWindow(QMainWindow):
                 if progress_dialog.wasCanceled():
                     raise Exception("下载被取消")
             
-            urllib.request.urlretrieve(download_url, temp_file, reporthook=update_progress)
+            # 下载ZIP文件
+            urllib.request.urlretrieve(download_url, zip_file, reporthook=update_progress)
             
             # 下载完成后关闭进度对话框
             progress_dialog.close()
             
-            # 创建更简单的更新批处理文件
+            # 创建更新批处理文件 - 优化为直接解压单个文件
             update_script = os.path.join(temp_dir, "update.bat")
             with open(update_script, "w") as f:
                 f.write(f"""@echo off
 echo 正在更新，请稍候...
 timeout /t 2 /nobreak > nul
 taskkill /F /IM POE2PriceAid.exe > nul 2>&1
-copy /Y "{temp_file}" "{current_exe}"
+
+REM 备份当前版本
+mkdir "{application_path}\\backup" 2>nul
+copy /Y "{current_exe}" "{application_path}\\backup\\POE2PriceAid_backup.exe" >nul
+
+REM 解压更新包 - 直接解压可执行文件
+powershell -command "$shell = New-Object -ComObject Shell.Application; $zip = $shell.NameSpace('{zip_file}'); $item = $zip.Items().Item(0); $shell.NameSpace('{application_path}').CopyHere($item, 0x14)"
+
+REM 启动新版本
 start "" "{current_exe}"
-rmdir /S /Q "{temp_dir}"
+
+REM 清理临时文件
+rmdir /S /Q "{temp_dir}" >nul
+
 exit
 """)
             
@@ -630,6 +643,59 @@ exit
         
         except Exception as e:
             QMessageBox.critical(self, "更新失败", f"更新过程中出错: {e}")
+
+    def check_updates_manually(self):
+        try:
+            # 显示检查更新的状态
+            status_dialog = QMessageBox(self)
+            status_dialog.setWindowTitle("检查更新")
+            status_dialog.setText("正在检查更新，请稍候...")
+            status_dialog.setStandardButtons(QMessageBox.NoButton)
+            status_dialog.setIcon(QMessageBox.Information)
+            status_dialog.show()
+            QApplication.processEvents()  # 确保对话框立即显示
+            
+            # 发送请求获取最新版本信息
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            # 使用超时参数，避免长时间等待
+            response = requests.get(self.update_url, headers=headers, timeout=5)
+            update_info = json.loads(response.text)
+            
+            # 关闭状态对话框
+            status_dialog.close()
+            
+            latest_version = update_info.get("version")
+            download_url = update_info.get("download_url")
+            
+            # 比较版本号
+            version_comparison = self.compare_versions(latest_version, self.current_version)
+            
+            if version_comparison > 0:
+                # 有新版本可用，显示更新提示
+                msg_box = QMessageBox()
+                msg_box.setIcon(QMessageBox.Information)
+                msg_box.setWindowTitle("发现新版本")
+                msg_box.setText(f"发现新版本 {latest_version}，当前版本 {self.current_version}")
+                msg_box.setInformativeText("是否立即更新？")
+                msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                msg_box.setDefaultButton(QMessageBox.Yes)
+                
+                if msg_box.exec_() == QMessageBox.Yes:
+                    # 用户选择更新，下载并替换当前程序
+                    self.download_and_replace(download_url)
+            else:
+                # 已经是最新版本，显示提示
+                QMessageBox.information(self, "检查更新", "当前已是最新版本。", QMessageBox.Ok)
+        
+        except requests.exceptions.Timeout:
+            # 处理请求超时
+            QMessageBox.warning(self, "检查更新", "检查更新超时，请稍后再试。", QMessageBox.Ok)
+        except Exception as e:
+            # 处理其他错误
+            QMessageBox.critical(self, "检查更新", f"检查更新时出错: {e}", QMessageBox.Ok)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

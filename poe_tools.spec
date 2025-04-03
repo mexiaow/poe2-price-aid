@@ -4,13 +4,14 @@
 a = Analysis(
     ['poe_tools.py'],
     pathex=[],
-    binaries=[('C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python310.dll', '.')],
-    datas=[('price_scraper.py', '.')],
+    binaries=[],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'tkinter', 'PySide2', 'PyQt5.QtWebEngineWidgets'],
+    excludes=['matplotlib', 'numpy', 'pandas', 'scipy', 'tkinter', 'PySide2', 'PyQt5.QtWebEngineWidgets', 
+              'PyQt5.QtMultimedia', 'PyQt5.QtLocation', 'PyQt5.QtQuick', 'PyQt5.QtSensors'],
     noarchive=False,
     optimize=0,
 )

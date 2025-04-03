@@ -584,9 +584,7 @@ class MainWindow(QMainWindow):
             
             # 创建临时目录 - 避免路径中有空格
             temp_dir = tempfile.mkdtemp(prefix="poe2update_")
-            
-            # 下载更新包
-            zip_file = os.path.join(temp_dir, "update.zip")
+            temp_file = os.path.join(temp_dir, "POE2PriceAid_new.exe")
             
             # 更新进度对话框文本
             progress_dialog.setLabelText("正在下载更新...")
@@ -600,13 +598,13 @@ class MainWindow(QMainWindow):
                 if progress_dialog.wasCanceled():
                     raise Exception("下载被取消")
             
-            # 下载ZIP文件
-            urllib.request.urlretrieve(download_url, zip_file, reporthook=update_progress)
+            # 下载可执行文件
+            urllib.request.urlretrieve(download_url, temp_file, reporthook=update_progress)
             
             # 下载完成后关闭进度对话框
             progress_dialog.close()
             
-            # 创建更新批处理文件 - 优化为直接解压单个文件
+            # 创建更新批处理文件 - 简化版本，直接替换可执行文件
             update_script = os.path.join(temp_dir, "update.bat")
             with open(update_script, "w") as f:
                 f.write(f"""@echo off
@@ -614,12 +612,8 @@ echo 正在更新，请稍候...
 timeout /t 2 /nobreak > nul
 taskkill /F /IM POE2PriceAid.exe > nul 2>&1
 
-REM 备份当前版本
-mkdir "{application_path}\\backup" 2>nul
-copy /Y "{current_exe}" "{application_path}\\backup\\POE2PriceAid_backup.exe" >nul
-
-REM 解压更新包 - 直接解压可执行文件
-powershell -command "$shell = New-Object -ComObject Shell.Application; $zip = $shell.NameSpace('{zip_file}'); $item = $zip.Items().Item(0); $shell.NameSpace('{application_path}').CopyHere($item, 0x14)"
+REM 替换可执行文件
+copy /Y "{temp_file}" "{current_exe}" >nul
 
 REM 启动新版本
 start "" "{current_exe}"

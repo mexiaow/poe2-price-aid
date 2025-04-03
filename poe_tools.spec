@@ -4,7 +4,7 @@
 a = Analysis(
     ['poe_tools.py'],
     pathex=[],
-    binaries=[],
+    binaries=[('C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python310.dll', '.')],
     datas=[],
     hiddenimports=[],
     hookspath=[],

@@ -74,7 +74,7 @@ class MainWindow(QMainWindow):
         
         # 版本信息
         self.current_version = "1.0.0"
-        self.update_url = "https://example.com/poe_tools_update.json"  # 替换为实际的更新检查URL
+        self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
         
         # 创建UI
         self.init_ui()

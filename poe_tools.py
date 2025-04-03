@@ -477,6 +477,19 @@ class MainWindow(QMainWindow):
 
     def check_for_updates(self):
         try:
+            # 显示检查更新的状态
+            status_dialog = QMessageBox(self)
+            status_dialog.setWindowTitle("检查更新")
+            status_dialog.setText("正在检查更新，请稍候...")
+            status_dialog.setStandardButtons(QMessageBox.NoButton)
+            status_dialog.setIcon(QMessageBox.Information)
+            
+            # 使用QTimer延迟显示状态对话框，避免闪烁
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(status_dialog.show)
+            timer.start(500)  # 如果500毫秒内完成检查，则不显示对话框
+            
             # 获取上次检查更新的时间
             last_check_file = "last_update_check.txt"
             now = datetime.now()
@@ -489,6 +502,7 @@ class MainWindow(QMainWindow):
                     
                     # 如果距离上次检查不到12小时，跳过
                     if (now - last_check).total_seconds() < 43200:  # 12小时 = 43200秒
+                        timer.stop()
                         return
             
             # 更新上次检查时间
@@ -499,8 +513,14 @@ class MainWindow(QMainWindow):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            response = requests.get(self.update_url, headers=headers)
+            
+            # 使用超时参数，避免长时间等待
+            response = requests.get(self.update_url, headers=headers, timeout=5)
             update_info = json.loads(response.text)
+            
+            # 关闭状态对话框
+            timer.stop()
+            status_dialog.close()
             
             latest_version = update_info.get("version")
             download_url = update_info.get("download_url")
@@ -520,6 +540,9 @@ class MainWindow(QMainWindow):
                     # 用户选择更新，下载并替换当前程序
                     self.download_and_replace(download_url)
         
+        except requests.exceptions.Timeout:
+            # 处理请求超时
+            print("检查更新超时")
         except Exception as e:
             print(f"检查更新时出错: {e}")
     
@@ -542,13 +565,14 @@ class MainWindow(QMainWindow):
     def download_and_replace(self, download_url):
         try:
             # 创建进度对话框
-            progress_dialog = QProgressDialog("正在下载更新...", "取消", 0, 100, self)
+            progress_dialog = QProgressDialog("准备下载更新...", "取消", 0, 100, self)
             progress_dialog.setWindowTitle("下载更新")
             progress_dialog.setWindowModality(Qt.WindowModal)
             progress_dialog.setAutoClose(True)
-            progress_dialog.setMinimumDuration(0)
+            progress_dialog.setMinimumDuration(0)  # 立即显示，不等待
             progress_dialog.setValue(0)
             progress_dialog.show()
+            QApplication.processEvents()  # 确保对话框立即显示
             
             # 获取当前程序路径
             current_exe = sys.executable
@@ -562,6 +586,10 @@ class MainWindow(QMainWindow):
             # 创建临时目录 - 避免路径中有空格
             temp_dir = tempfile.mkdtemp(prefix="poe2update_")
             temp_file = os.path.join(temp_dir, "POE2PriceAid_new.exe")
+            
+            # 更新进度对话框文本
+            progress_dialog.setLabelText("正在下载更新...")
+            QApplication.processEvents()
             
             # 下载新版本
             def update_progress(count, block_size, total_size):

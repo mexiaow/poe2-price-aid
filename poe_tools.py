@@ -110,14 +110,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.2"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.2"
+        self.current_version = "1.0.4"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.4"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
         
         # 添加一个属性来跟踪取消状态
         self.download_canceled = False
+        
+        # 清理缓存，确保字体大小一致
+        self.clear_app_cache()
         
         # 在窗口标题中添加版本号
         self.setWindowTitle(f"POE2PriceAid v{self.current_version}")
@@ -184,19 +187,26 @@ class MainWindow(QMainWindow):
                 border: none;
                 background-color: #1E1E1E;
                 border-radius: 8px;
+                margin-top: 5px; /* 增加标签页内容与标签的间距 */
             }
             QTabBar::tab {
                 background-color: #2D2D2D;
                 color: #CCCCCC;
-                padding: 10px 20px;
-                margin-right: 2px;
+                padding: 12px 24px; /* 增加内边距，使按钮更大 */
+                margin-right: 6px; /* 增加标签之间的间距 */
                 border: none;
-                border-radius: 5px 5px 0 0;
+                border-radius: 6px 6px 0 0;
+                font-size: 17px; /* 增加字体大小 */
+                font-weight: bold;
             }
             QTabBar::tab:selected {
                 background-color: #3D3D3D;
                 color: #FFFFFF;
-                border-bottom: 2px solid #0078D7;
+                border-bottom: 3px solid #0078D7; /* 增加底部边框厚度 */
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #353535;
+                color: #FFFFFF;
             }
             QGroupBox {
                 background-color: #2D2D2D;
@@ -438,7 +448,8 @@ class MainWindow(QMainWindow):
         """创建选项卡"""
         # 选项卡
         tab_widget = QTabWidget()
-        tab_widget.setStyleSheet("QTabBar::tab { padding: 10px 20px; }")
+        # 移除这行，因为我们已经在样式表中设置了标签样式
+        # tab_widget.setStyleSheet("QTabBar::tab { padding: 10px 20px; }")
         
         # 价格监控选项卡
         price_tab = QWidget()
@@ -568,6 +579,8 @@ class MainWindow(QMainWindow):
         # 标题和内容样式
         title_style = "font-size: 24px; margin-bottom: 10px; font-weight: bold;"
         content_style = "font-size: 18px; margin-bottom: 5px;"
+        # 为易刷、一乐过滤和繁体化标题创建小一号的标题样式
+        subtitle_style = "font-size: 20px; margin-bottom: 10px; font-weight: bold;"
         
         # 下载部分 - 标题和链接分行显示
         # 移除水平布局，直接添加到主布局
@@ -600,8 +613,11 @@ class MainWindow(QMainWindow):
         step2 = QLabel("2.选择POE2根目录Content.ggpk")
         step3 = QLabel("3.然后将你需要的补丁zip压缩包直接拖进VisualGGPK3窗口")
         
+        # 为步骤设置更大的字体
+        steps_style = content_style.replace("18px", "22px")  # 将字体从18px增加到22px
+        
         for step in [step1, step2, step3]:
-            step.setStyleSheet(content_style)
+            step.setStyleSheet(steps_style)
             steps_layout.addWidget(step)
         
         tools_layout.addLayout(steps_layout)
@@ -615,15 +631,15 @@ class MainWindow(QMainWindow):
         easy_refresh_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
         easy_refresh_layout.setSpacing(5)  # 减小间距
         
-        # 最新版本部分
+        # 最新版本部分 - 使用小一号的标题样式
         er_download_title = QLabel("易刷最新版本：")
-        er_download_title.setStyleSheet(title_style)
+        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
         easy_refresh_layout.addWidget(er_download_title)
         
         # 增加链接字体大小
         er_download_link = QLabel("<a href='https://efarm-gjf-release3.710421059.xyz/' style='color: #0078d7;'>https://efarm-gjf-release3.710421059.xyz/</a>")
         er_download_link.setOpenExternalLinks(True)
-        er_download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
+        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 增加字体大小到24px
         easy_refresh_layout.addWidget(er_download_link)
         
         # 添加一些空间，但减少高度
@@ -631,25 +647,48 @@ class MainWindow(QMainWindow):
         er_spacer.setStyleSheet("margin-top: 10px;")
         easy_refresh_layout.addWidget(er_spacer)
 
-        # poe2网页市集繁体化部分
+        # 一乐过滤部分 - 使用小一号的标题样式
+        er_download_title = QLabel("一乐过滤：")
+        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
+        easy_refresh_layout.addWidget(er_download_title)
+        
+        # 增加链接字体大小，但比其他链接小一号
+        er_download_link = QLabel("<a href='https://cloud.xiaow.org:8443/s/wRSz' style='color: #0078d7;'>https://cloud.xiaow.org:8443/s/wRSz</a>")
+        er_download_link.setOpenExternalLinks(True)
+        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 字体调小到22px
+        easy_refresh_layout.addWidget(er_download_link)
+        
+        # 添加一些空间，但减少高度
+        er_spacer = QLabel("")
+        er_spacer.setStyleSheet("margin-top: 10px;")
+        easy_refresh_layout.addWidget(er_spacer)
+
+        # poe2网页市集繁体化部分 - 使用小一号的标题样式
         er_download_title = QLabel("poe2网页市集繁体化：")
-        er_download_title.setStyleSheet(title_style)
+        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
         easy_refresh_layout.addWidget(er_download_title)
         
         # 增加链接字体大小
         er_download_link = QLabel("<a href='https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93' style='color: #0078d7;'>https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93</a>")
         er_download_link.setOpenExternalLinks(True)
-        er_download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
+        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 增加字体大小到24px
         easy_refresh_layout.addWidget(er_download_link)
         
         # 不需要太多的弹性空间
         easy_refresh_layout.addStretch(1)
         
+        # 添加BD监控选项卡
+        bd_monitor_tab = QWidget()
+        bd_monitor_layout = QVBoxLayout(bd_monitor_tab)
+        bd_monitor_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
+        bd_monitor_layout.setSpacing(5)  # 减小间距
+        
         # 添加主选项卡
         tab_widget.clear()  # 清除所有现有标签
         tab_widget.addTab(price_tab, "价格监控")
+        tab_widget.addTab(bd_monitor_tab, "BD监控")
         tab_widget.addTab(tools_tab, "A大补丁")
-        tab_widget.addTab(easy_refresh_tab, "易刷查价")
+        tab_widget.addTab(easy_refresh_tab, "查价过滤汉化")
         
         parent_layout.addWidget(tab_widget)
     
@@ -815,7 +854,7 @@ class MainWindow(QMainWindow):
             }
             
             # 警告：这会降低安全性，仅在测试环境使用
-            response = requests.get(self.update_url, headers=headers, timeout=5, verify=False)
+            response = requests.get(self.update_url, headers=headers, timeout=5, verify=True)
             update_info = json.loads(response.text)
             
             latest_version = update_info.get("version")
@@ -1195,6 +1234,55 @@ exit
         
         # 调用父类方法
         super().closeEvent(event)
+
+    def clear_app_cache(self):
+        """清理应用程序缓存，确保字体大小一致"""
+        try:
+            # 获取应用程序缓存目录
+            cache_dir = None
+            
+            # 根据操作系统确定缓存目录
+            if os.name == 'nt':  # Windows
+                cache_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'POE2PriceAid', 'cache')
+            else:  # Linux/Mac
+                cache_dir = os.path.join(os.path.expanduser('~'), '.cache', 'POE2PriceAid')
+            
+            # 如果缓存目录存在，尝试清理
+            if cache_dir and os.path.exists(cache_dir):
+                # 遍历缓存目录中的所有文件和子目录
+                for root, dirs, files in os.walk(cache_dir, topdown=False):
+                    # 删除所有文件
+                    for file in files:
+                        try:
+                            os.remove(os.path.join(root, file))
+                        except:
+                            pass
+                    
+                    # 删除所有子目录
+                    for dir in dirs:
+                        try:
+                            shutil.rmtree(os.path.join(root, dir), ignore_errors=True)
+                        except:
+                            pass
+            
+            # 设置统一的字体大小
+            font = self.font()
+            font.setPointSize(10)  # 设置统一的字体大小
+            self.setFont(font)
+            
+            # 设置应用程序级别的字体
+            app = QApplication.instance()
+            if app:
+                app.setFont(font)
+            
+            # 强制应用DPI设置
+            if hasattr(QApplication, 'setAttribute'):
+                QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+                QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+            
+        except Exception as e:
+            # 出错时不影响程序运行，只是记录错误
+            print(f"清理缓存时出错: {e}")
 
 if __name__ == "__main__":
     # 设置环境变量，确保PyInstaller能找到临时目录

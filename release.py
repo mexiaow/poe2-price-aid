@@ -224,6 +224,86 @@ def check_syntax():
         print(f"❌ 语法检查失败: {e}")
         return False
 
+def clean_cache_before_packaging():
+    """在打包前清理缓存目录，确保字体大小一致"""
+    print("🧹 正在清理缓存目录...")
+    try:
+        # 获取可能的缓存目录
+        cache_dirs = []
+        
+        # Windows缓存目录
+        if os.name == 'nt':
+            localappdata = os.environ.get('LOCALAPPDATA', '')
+            if localappdata:
+                cache_dirs.append(os.path.join(localappdata, 'POE2PriceAid', 'cache'))
+                cache_dirs.append(os.path.join(localappdata, 'POE2PriceAid'))
+                # PyQt缓存目录
+                cache_dirs.append(os.path.join(localappdata, 'PyQt5', 'cache'))
+                cache_dirs.append(os.path.join(localappdata, 'PyQt5'))
+        
+        # Linux/Mac缓存目录
+        home = os.path.expanduser('~')
+        cache_dirs.append(os.path.join(home, '.cache', 'POE2PriceAid'))
+        cache_dirs.append(os.path.join(home, '.cache', 'PyQt5'))
+        
+        # 项目目录中的缓存
+        cache_dirs.append(os.path.join(os.getcwd(), 'cache'))
+        cache_dirs.append(os.path.join(os.getcwd(), '.cache'))
+        cache_dirs.append(os.path.join(os.getcwd(), '__pycache__'))
+        
+        # 清理所有可能的缓存目录
+        cleaned = False
+        for cache_dir in cache_dirs:
+            if os.path.exists(cache_dir):
+                print(f"  - 清理缓存目录: {cache_dir}")
+                try:
+                    # 遍历缓存目录中的所有文件和子目录
+                    for root, dirs, files in os.walk(cache_dir, topdown=False):
+                        # 删除所有文件
+                        for file in files:
+                            try:
+                                os.remove(os.path.join(root, file))
+                            except Exception as e:
+                                print(f"    无法删除文件 {os.path.join(root, file)}: {e}")
+                        
+                        # 删除所有子目录
+                        for dir in dirs:
+                            try:
+                                shutil.rmtree(os.path.join(root, dir), ignore_errors=True)
+                            except Exception as e:
+                                print(f"    无法删除目录 {os.path.join(root, dir)}: {e}")
+                    
+                    cleaned = True
+                except Exception as e:
+                    print(f"  - 清理目录 {cache_dir} 时出错: {e}")
+        
+        # 清理PyQt5编译的UI文件
+        pyc_files = []
+        for root, dirs, files in os.walk(os.getcwd()):
+            for file in files:
+                if file.endswith('.pyc') or file.endswith('.pyo'):
+                    pyc_files.append(os.path.join(root, file))
+        
+        if pyc_files:
+            print(f"  - 清理 {len(pyc_files)} 个编译的Python文件")
+            for pyc_file in pyc_files:
+                try:
+                    os.remove(pyc_file)
+                except Exception as e:
+                    print(f"    无法删除文件 {pyc_file}: {e}")
+        
+        if cleaned:
+            print("✅ 缓存目录清理完成")
+        else:
+            print("ℹ️ 未找到需要清理的缓存目录")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 清理缓存目录时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def run_pyinstaller():
     """运行PyInstaller打包应用"""
     print("🔧 正在打包应用程序...")
@@ -330,14 +410,22 @@ def main():
         print("\n⚠️ 警告: poe_tools.py存在语法错误，请修复后再继续")
         return
     
-    # 4. 运行PyInstaller
+    # 4. 在打包前清理缓存
+    if not clean_cache_before_packaging():
+        print("\n⚠️ 警告: 清理缓存失败，可能会影响字体大小一致性")
+        confirm = input("是否继续打包? (Y/N, 默认Y): ").strip().upper()
+        if confirm == 'N':
+            print("已取消操作")
+            return
+    
+    # 5. 运行PyInstaller
     if not run_pyinstaller():
         return
     
-    # 5. 复制到桌面
+    # 6. 复制到桌面
     copy_to_desktop(new_version)
     
-    # 6. 上传到WebDAV
+    # 7. 上传到WebDAV
     if not upload_to_webdav(new_version):
         print("\n⚠️ 警告: 上传到WebDAV失败，请手动上传文件")
     

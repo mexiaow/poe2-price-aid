@@ -108,7 +108,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.2"  # 确保在使用之前初始化
+        self.current_version = "1.0.3"  # 确保在使用之前初始化
         self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
         
         # 添加更新标志，避免重复检查

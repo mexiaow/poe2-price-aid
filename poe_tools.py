@@ -18,6 +18,8 @@ import subprocess
 import tempfile
 import urllib.request
 import shutil
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # 在程序启动时确保能找到Python DLL
 if getattr(sys, 'frozen', False):
@@ -109,7 +111,7 @@ class MainWindow(QMainWindow):
         
         # 版本信息
         self.current_version = "1.0.3"  # 确保在使用之前初始化
-        self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
+        self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/main/update.json"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -138,6 +140,12 @@ class MainWindow(QMainWindow):
         self.price_thread.finished.connect(self.on_price_refresh_finished)  # 添加完成信号处理
         self.price_thread.start()
         
+        # 注释掉自动更新检查
+        # self.update_timer = QTimer(self)
+        # self.update_timer.timeout.connect(self.check_for_updates)
+        # self.update_timer.start(3600000)  # 每小时检查一次更新 (3600000毫秒)
+        # 
+        # # 启动时检查更新
         # 设置自动更新检查
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.check_for_updates)
@@ -800,13 +808,14 @@ class MainWindow(QMainWindow):
             return
         
         try:
+            # 从本地文件读取更新信息
             # 自动检查不显示状态对话框，直接进行检查
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            # 使用超时参数，避免长时间等待
-            response = requests.get(self.update_url, headers=headers, timeout=5)
+            # 警告：这会降低安全性，仅在测试环境使用
+            response = requests.get(self.update_url, headers=headers, timeout=5, verify=False)
             update_info = json.loads(response.text)
             
             latest_version = update_info.get("version")
@@ -832,7 +841,7 @@ class MainWindow(QMainWindow):
         
         except Exception as e:
             # 自动检查时出错，不显示提示，只记录日志
-            pass
+            print(f"自动检查更新时出错: {e}")
 
     def compare_versions(self, version1, version2):
         """比较两个版本号，返回 1 如果 version1 > version2，返回 -1 如果 version1 < version2，返回 0 如果相等"""

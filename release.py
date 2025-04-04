@@ -7,9 +7,19 @@ import re
 import json
 import subprocess
 import shutil
+import requests
 from datetime import datetime
+from urllib.parse import quote
 
 VERSION_FILE = 'version.txt'  # 存储版本号的文件
+
+# WebDAV配置
+WEBDAV_CONFIG = {
+    'url': 'https://ali.xiaow.org:8443/dav',
+    'username': 'POE2',
+    'password': 'g6rz3@DsVN%teuxf',
+    'download_url_base': 'https://ali.xiaow.org:8443/d/Share/POE2PriceAid/'
+}
 
 def get_next_version():
     """从version.txt读取当前版本号并计算下一个版本号"""
@@ -96,8 +106,8 @@ def update_version_in_source(new_version):
 
 def update_json_file(version):
     """更新update.json文件中的版本号和下载URL"""
-    # GitHub下载URL - 不带v前缀的路径，但文件名带v前缀
-    download_url = f"https://github.com/mexiaow/poe_tools/releases/download/{version}/POE2PriceAid_v{version}.exe"
+    # 使用WebDAV下载URL
+    download_url = f"{WEBDAV_CONFIG['download_url_base']}POE2PriceAid_v{version}.exe"
     
     try:
         # 创建新的update.json内容
@@ -115,6 +125,80 @@ def update_json_file(version):
         return True
     except Exception as e:
         print(f"❌ 更新update.json失败: {e}")
+        return False
+
+def upload_to_webdav(version):
+    """将程序和update.json上传到WebDAV服务器"""
+    print("📤 正在上传文件到WebDAV服务器...")
+    
+    try:
+        # 准备要上传的文件
+        exe_file = os.path.join("dist", f"POE2PriceAid_v{version}.exe")
+        json_file = "update.json"
+        
+        # 检查文件是否存在
+        if not os.path.exists(exe_file):
+            print(f"❌ 可执行文件不存在: {exe_file}")
+            
+            # 尝试在dist目录下查找匹配的文件
+            dist_files = []
+            for root, dirs, files in os.walk("dist"):
+                for file in files:
+                    if file.startswith("POE2PriceAid") and file.endswith(".exe"):
+                        dist_files.append(os.path.join(root, file))
+            
+            if dist_files:
+                # 使用找到的第一个文件
+                exe_file = dist_files[0]
+                print(f"找到打包文件: {exe_file}")
+            else:
+                print("❌ 在dist目录中未找到任何POE2PriceAid*.exe文件")
+                return False
+        
+        if not os.path.exists(json_file):
+            print(f"❌ update.json文件不存在")
+            return False
+        
+        # 上传可执行文件
+        with open(exe_file, 'rb') as f:
+            exe_data = f.read()
+        
+        exe_response = requests.put(
+            f"{WEBDAV_CONFIG['url']}/POE2PriceAid_v{version}.exe",
+            data=exe_data,
+            auth=(WEBDAV_CONFIG['username'], WEBDAV_CONFIG['password']),
+            headers={'Content-Type': 'application/octet-stream'}
+        )
+        
+        if exe_response.status_code not in (200, 201, 204):
+            print(f"❌ 上传可执行文件失败: HTTP {exe_response.status_code}")
+            return False
+        
+        # 上传update.json文件
+        with open(json_file, 'rb') as f:
+            json_data = f.read()
+        
+        json_response = requests.put(
+            f"{WEBDAV_CONFIG['url']}/update.json",
+            data=json_data,
+            auth=(WEBDAV_CONFIG['username'], WEBDAV_CONFIG['password']),
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if json_response.status_code not in (200, 201, 204):
+            print(f"❌ 上传update.json文件失败: HTTP {json_response.status_code}")
+            return False
+        
+        print(f"✅ 文件上传成功")
+        print(f"  - 可执行文件: {WEBDAV_CONFIG['url']}/POE2PriceAid_v{version}.exe")
+        print(f"  - update.json: {WEBDAV_CONFIG['url']}/update.json")
+        print(f"  - 下载链接: {WEBDAV_CONFIG['download_url_base']}POE2PriceAid_v{version}.exe")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 上传到WebDAV失败: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def check_syntax():
@@ -237,7 +321,6 @@ def main():
     # 3. 检查语法
     if not check_syntax():
         print("\n⚠️ 警告: poe_tools.py存在语法错误，请修复后再继续")
-        print("提示: 检查第85-86行的缩进问题")
         return
     
     # 4. 运行PyInstaller
@@ -247,12 +330,16 @@ def main():
     # 5. 复制到桌面
     copy_to_desktop(new_version)
     
+    # 6. 上传到WebDAV
+    if not upload_to_webdav(new_version):
+        print("\n⚠️ 警告: 上传到WebDAV失败，请手动上传文件")
+    
     print("\n✨ 发布流程完成! ✨")
     print(f"版本号: {new_version}")
     print("\n📋 后续步骤:")
     print(f"1. 程序已打包到dist文件夹，并复制到桌面")
-    print(f"2. 创建新的GitHub Release，标签为 {new_version} (不带v前缀)")
-    print(f"3. 上传程序并发布Release")
+    print(f"2. 程序和update.json已上传到WebDAV服务器")
+    print(f"3. 下载链接: {WEBDAV_CONFIG['download_url_base']}POE2PriceAid_v{new_version}.exe")
 
 if __name__ == "__main__":
     try:

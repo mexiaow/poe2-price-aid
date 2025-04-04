@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVB
                             QHBoxLayout, QLabel, QPushButton, QLineEdit, QComboBox, QGroupBox,
                             QGridLayout, QFrame, QSplitter, QTableWidget, QTableWidgetItem, QHeaderView,
                             QMessageBox, QProgressDialog)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
 from PyQt5.QtGui import QFont, QColor, QPalette
 import json
 import os
@@ -17,6 +18,34 @@ import subprocess
 import tempfile
 import urllib.request
 import shutil
+
+# 在程序启动时确保能找到Python DLL
+if getattr(sys, 'frozen', False):
+    # 将应用程序目录添加到DLL搜索路径
+    os.environ['PATH'] = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)) + os.pathsep + os.environ['PATH']
+    
+    # 使用ctypes预加载python DLL
+    import ctypes
+    try:
+        dll_path = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)), 'python310.dll')
+        if os.path.exists(dll_path):
+            ctypes.CDLL(dll_path)
+            print(f"成功加载 Python DLL: {dll_path}")
+    except Exception as e:
+        print(f"加载 Python DLL 失败: {e}")
+
+    # 在程序开头添加
+    print(f"应用程序路径: {sys.executable}")
+    print(f"临时目录: {getattr(sys, '_MEIPASS', 'Not found')}")
+    print(f"当前环境变量PATH: {os.environ['PATH']}")
+    
+    # 列出_MEIPASS中的文件
+    if hasattr(sys, '_MEIPASS'):
+        print("临时目录中的文件:")
+        for root, dirs, files in os.walk(sys._MEIPASS):
+            for file in files:
+                if file.endswith('.dll'):
+                    print(f" - {os.path.join(root, file)}")
 
 class PriceScraper(QThread):
     price_updated = pyqtSignal(str, float)
@@ -63,8 +92,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.0"  # 确保在使用之前初始化
+        self.current_version = "1.0.1"  # 确保在使用之前初始化
         self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
+        
+        # 添加更新标志，避免重复检查
+        self.is_updating = False
+        
+        # 添加一个属性来跟踪取消状态
+        self.download_canceled = False
         
         # 在窗口标题中添加版本号
         self.setWindowTitle(f"POE2PriceAid v{self.current_version}")
@@ -77,8 +112,6 @@ class MainWindow(QMainWindow):
         self.prices = {"divine": 0.00, "exalted": 0.00, "chaos": 0.00}
         self.currency_names = {"divine": "神圣石", "exalted": "崇高石", "chaos": "混沌石"}
         self.currency_colors = {"divine": "#FFD700", "exalted": "#00BFFF", "chaos": "#FF6347"}
-        
-        
         
         # 创建UI
         self.init_ui()
@@ -494,21 +527,12 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def check_for_updates(self):
+        # 如果正在更新，则跳过
+        if self.is_updating:
+            return
+        
         try:
-            # 显示检查更新的状态
-            status_dialog = QMessageBox(self)
-            status_dialog.setWindowTitle("检查更新")
-            status_dialog.setText("正在检查更新，请稍候...")
-            status_dialog.setStandardButtons(QMessageBox.NoButton)
-            status_dialog.setIcon(QMessageBox.Information)
-            
-            # 使用QTimer延迟显示状态对话框，避免闪烁
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.timeout.connect(status_dialog.show)
-            timer.start(500)  # 如果500毫秒内完成检查，则不显示对话框
-            
-            # 直接获取最新版本信息
+            # 自动检查不显示状态对话框，直接进行检查
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -517,15 +541,13 @@ class MainWindow(QMainWindow):
             response = requests.get(self.update_url, headers=headers, timeout=5)
             update_info = json.loads(response.text)
             
-            # 关闭状态对话框
-            timer.stop()
-            status_dialog.close()
-            
             latest_version = update_info.get("version")
             download_url = update_info.get("download_url")
             
             # 比较版本号
-            if self.compare_versions(latest_version, self.current_version) > 0:
+            version_comparison = self.compare_versions(latest_version, self.current_version)
+            
+            if version_comparison > 0:
                 # 有新版本可用，显示更新提示
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Information)
@@ -538,13 +560,12 @@ class MainWindow(QMainWindow):
                 if msg_box.exec_() == QMessageBox.Yes:
                     # 用户选择更新，下载并替换当前程序
                     self.download_and_replace(download_url)
+            # 如果是最新版本，不显示任何提示
         
-        except requests.exceptions.Timeout:
-            # 处理请求超时
-            print("检查更新超时")
         except Exception as e:
-            print(f"检查更新时出错: {e}")
-    
+            # 自动检查时出错，不显示提示，只记录日志
+            print(f"自动检查更新时出错: {e}")
+
     def compare_versions(self, version1, version2):
         """比较两个版本号，返回 1 如果 version1 > version2，返回 -1 如果 version1 < version2，返回 0 如果相等"""
         v1_parts = list(map(int, version1.split('.')))
@@ -563,92 +584,198 @@ class MainWindow(QMainWindow):
 
     def download_and_replace(self, download_url):
         try:
-            # 创建进度对话框
-            progress_dialog = QProgressDialog("准备下载更新...", "取消", 0, 100, self)
-            progress_dialog.setWindowTitle("下载更新")
-            progress_dialog.setWindowModality(Qt.WindowModal)
-            progress_dialog.setAutoClose(True)
-            progress_dialog.setMinimumDuration(0)  # 立即显示，不等待
-            progress_dialog.setValue(0)
-            progress_dialog.show()
-            QApplication.processEvents()  # 确保对话框立即显示
+            # 设置更新标志
+            self.is_updating = True
             
-            # 获取当前程序路径
+            # 获取当前程序路径和名称
             current_exe = sys.executable
-            if getattr(sys, 'frozen', False):
-                # 如果是打包后的程序
-                application_path = os.path.dirname(current_exe)
-            else:
-                # 如果是源代码运行
-                application_path = os.path.dirname(os.path.abspath(__file__))
+            exe_dir = os.path.dirname(current_exe)
+            exe_name = os.path.basename(current_exe)
             
-            # 创建临时目录 - 避免路径中有空格
-            temp_dir = tempfile.mkdtemp(prefix="poe2update_")
-            temp_file = os.path.join(temp_dir, "POE2PriceAid_new.exe")
+            # 从update.json获取新版本号
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(self.update_url, headers=headers, timeout=5)
+            update_info = json.loads(response.text)
+            new_version = update_info.get("version", "unknown")
             
-            # 更新进度对话框文本
-            progress_dialog.setLabelText("正在下载更新...")
+            # 使用新版本号创建目标文件名
+            new_exe_name = f"POE2PriceAid_v{new_version}.exe"
+            
+            # 检查是否已经有版本号
+            if not re.search(r'_v[0-9.]+\.exe$', exe_name):
+                # 创建带版本号的文件名
+                new_name = os.path.join(exe_dir, f"POE2PriceAid_v{self.current_version}.exe")
+                
+                # 复制当前程序到新名称
+                try:
+                    shutil.copy2(current_exe, new_name)
+                    # 启动新程序
+                    subprocess.Popen([new_name])
+                    # 退出当前程序
+                    sys.exit(0)
+                except Exception as e:
+                    print(f"重命名失败: {e}")
+            
+            # 创建进度对话框
+            self.progress_dialog = QProgressDialog("正在下载更新...", "取消", 0, 100, self)
+            self.progress_dialog.setWindowTitle("更新")
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setValue(0)
+            self.progress_dialog.show()
             QApplication.processEvents()
             
-            # 下载新版本
-            def update_progress(count, block_size, total_size):
-                percent = int(count * block_size * 100 / total_size)
-                progress_dialog.setValue(min(percent, 100))
-                QApplication.processEvents()
-                if progress_dialog.wasCanceled():
-                    raise Exception("下载被取消")
+            # 在progress_dialog中设置取消按钮连接
+            self.progress_dialog.canceled.connect(self.cancel_download)
             
-            # 下载可执行文件
-            urllib.request.urlretrieve(download_url, temp_file, reporthook=update_progress)
+            # 使用requests下载
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
             
-            # 下载完成后关闭进度对话框
-            progress_dialog.close()
+            # 添加错误日志
+            print(f"正在从 {download_url} 下载更新")
             
-            # 创建更新批处理文件 - 简化版本，直接替换可执行文件
-            update_script = os.path.join(temp_dir, "update.bat")
-            with open(update_script, "w") as f:
+            # 使用stream=True来启用流式下载
+            response = requests.get(download_url, headers=headers, stream=True, timeout=30)
+            
+            # 检查状态码
+            if response.status_code != 200:
+                self.progress_dialog.close()
+                QMessageBox.critical(self, "下载失败", f"服务器返回错误状态码: {response.status_code}")
+                self.is_updating = False
+                return
+            
+            # 获取文件大小
+            total_size = int(response.headers.get('content-length', 0))
+            if total_size == 0:
+                self.progress_dialog.close()
+                QMessageBox.critical(self, "下载失败", "无法获取文件大小信息，可能是下载链接无效")
+                self.is_updating = False
+                return
+            
+            # 下载并保存文件到临时文件名
+            temp_file = os.path.join(exe_dir, "POE2PriceAid_new.exe")
+            downloaded_size = 0
+            
+            with open(temp_file, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:  # 过滤掉保持连接活跃的空块
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        # 更新进度
+                        progress = int(downloaded_size * 100 / total_size)
+                        self.progress_dialog.setValue(progress)
+                        QApplication.processEvents()
+                        
+                    # 检查是否取消
+                    if self.progress_dialog.wasCanceled():
+                        f.close()
+                        if os.path.exists(temp_file):
+                            os.remove(temp_file)
+                        self.progress_dialog.close()
+                        self.is_updating = False
+                        return
+            
+            # 检查下载是否完成且文件大小正确
+            if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
+                self.progress_dialog.close()
+                QMessageBox.critical(self, "更新失败", "下载的文件为空或者不存在")
+                self.is_updating = False
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                return
+            
+            # 关闭进度对话框
+            self.progress_dialog.close()
+            
+            # 创建更新批处理脚本
+            updater_script = os.path.join(exe_dir, "update.bat")
+            with open(updater_script, "w", encoding="gbk") as f:  # 使用GBK编码，适合中文Windows
                 f.write(f"""@echo off
-echo 正在更新，请稍候...
-timeout /t 2 /nobreak > nul
-taskkill /F /IM POE2PriceAid.exe > nul 2>&1
+chcp 936 > nul
+echo 正在更新POE2PriceAid...
+echo 请等待程序关闭...
 
-REM 替换可执行文件
-copy /Y "{temp_file}" "{current_exe}" >nul
+rem 等待原程序退出
+timeout /t 5 /nobreak > nul
 
-REM 启动新版本
-start "" "{current_exe}"
+rem 替换文件 (使用强制删除)
+echo 正在替换文件...
+del /f /q "{current_exe}"
+if exist "{current_exe}" (
+  echo 无法删除原文件，请手动更新
+  echo 源文件: {temp_file}
+  echo 目标文件: {exe_dir}\\{new_exe_name}
+  pause
+  exit /b 1
+)
 
-REM 清理临时文件
-rmdir /S /Q "{temp_dir}" >nul
+rem 移动新文件到带版本号的文件名
+move /y "{temp_file}" "{exe_dir}\\{new_exe_name}"
+if errorlevel 1 (
+  echo 移动文件失败，请手动更新
+  pause
+  exit /b 1
+)
 
+echo 更新成功！请手动启动程序。
+
+rem 延迟删除自身
+ping 127.0.0.1 -n 2 > nul
+del "%~f0"
 exit
 """)
             
-            # 确认更新
-            reply = QMessageBox.question(self, "确认更新", 
-                                        "程序将关闭并安装更新，完成后会自动重启。是否继续？",
-                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-            
-            if reply == QMessageBox.Yes:
-                # 执行更新脚本
-                subprocess.Popen([update_script], shell=True)
-                self.close()
-                sys.exit(0)
+            # 提示用户更新，使用新版本号
+            QMessageBox.information(self, "下载完成", f"更新已下载完成，程序将关闭并进行更新。\n更新完成后请手动启动 {new_exe_name}。")
+
+            # 启动更新脚本并退出
+            subprocess.Popen([updater_script], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            QTimer.singleShot(500, self.close)
+            QTimer.singleShot(1000, lambda: sys.exit(0))
         
         except Exception as e:
+            if hasattr(self, 'progress_dialog') and self.progress_dialog:
+                self.progress_dialog.close()
             QMessageBox.critical(self, "更新失败", f"更新过程中出错: {e}")
+            print(f"更新错误详情: {str(e)}")
+            self.is_updating = False
 
     def check_updates_manually(self):
+        # 如果正在更新，则跳过
+        if self.is_updating:
+            QMessageBox.information(self, "正在更新", "更新已在进行中，请稍候...", QMessageBox.Ok)
+            return
+        
         try:
-            # 显示检查更新的状态
+            # 创建可关闭的状态对话框
             status_dialog = QMessageBox(self)
             status_dialog.setWindowTitle("检查更新")
             status_dialog.setText("正在检查更新，请稍候...")
-            status_dialog.setStandardButtons(QMessageBox.NoButton)
+            status_dialog.setStandardButtons(QMessageBox.Cancel)
             status_dialog.setIcon(QMessageBox.Information)
-            status_dialog.show()
-            QApplication.processEvents()  # 确保对话框立即显示
             
+            # 创建一个定时器，如果检查时间过长，允许用户取消
+            check_timer = QTimer(self)
+            check_timer.setSingleShot(True)
+            check_timer.timeout.connect(lambda: self._perform_manual_update_check(status_dialog))
+            check_timer.start(0)  # 立即开始检查
+            
+            # 显示对话框并等待用户响应
+            result = status_dialog.exec_()
+            
+            # 如果用户取消，则停止检查
+            if result == QMessageBox.Cancel:
+                return
+        
+        except Exception as e:
+            QMessageBox.critical(self, "检查更新", f"检查更新时出错: {e}", QMessageBox.Ok)
+
+    def _perform_manual_update_check(self, status_dialog):
+        try:
             # 发送请求获取最新版本信息
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -659,7 +786,7 @@ exit
             update_info = json.loads(response.text)
             
             # 关闭状态对话框
-            status_dialog.close()
+            status_dialog.done(0)
             
             latest_version = update_info.get("version")
             download_url = update_info.get("download_url")
@@ -686,12 +813,56 @@ exit
         
         except requests.exceptions.Timeout:
             # 处理请求超时
+            status_dialog.done(0)  # 关闭状态对话框
             QMessageBox.warning(self, "检查更新", "检查更新超时，请稍后再试。", QMessageBox.Ok)
         except Exception as e:
             # 处理其他错误
+            status_dialog.done(0)  # 关闭状态对话框
             QMessageBox.critical(self, "检查更新", f"检查更新时出错: {e}", QMessageBox.Ok)
 
+    def create_desktop_shortcut(self):
+        try:
+            # 获取当前程序路径
+            current_exe = sys.executable
+            if getattr(sys, 'frozen', False):
+                # 如果是打包后的程序
+                application_path = os.path.dirname(current_exe)
+            else:
+                # 如果是源代码运行
+                application_path = os.path.dirname(os.path.abspath(__file__))
+            
+            # 启动器路径
+            launcher_path = os.path.join(application_path, "launcher.bat")
+            
+            # 如果启动器不存在，创建它
+            if not os.path.exists(launcher_path):
+                with open(launcher_path, "w") as f:
+                    f.write(f"""@echo off
+start "" "{current_exe}"
+exit
+""")
+            
+            # 获取桌面路径
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            
+            # 创建快捷方式
+            shortcut_path = os.path.join(desktop_path, "POE2PriceAid.lnk")
+            self.create_shortcut(launcher_path, shortcut_path, "POE2PriceAid", application_path)
+            
+            return True
+        except Exception as e:
+            print(f"创建桌面快捷方式失败: {e}")
+            return False
+
+    def cancel_download(self):
+        self.download_canceled = True
+        self.is_updating = False
+
 if __name__ == "__main__":
+    # 设置环境变量，确保PyInstaller能找到临时目录
+    if getattr(sys, 'frozen', False):
+        os.environ['PYI_APPLICATION_HOME_DIR'] = os.path.dirname(sys.executable)
+    
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

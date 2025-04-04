@@ -1,0 +1,16 @@
+# 忽略构建目录
+/build/
+/dist/
+
+# 其他常见的Python项目忽略项
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.env
+.venv
+venv/
+ENV/

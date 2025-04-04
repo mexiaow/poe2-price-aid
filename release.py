@@ -18,7 +18,7 @@ WEBDAV_CONFIG = {
     'url': 'https://ali.xiaow.org:8443/dav',
     'username': 'POE2',
     'password': 'g6rz3@DsVN%teuxf',
-    'download_url_base': 'https://ali.xiaow.org:8443/d/Share/POE2PriceAid/'
+    'download_url_base': 'https://r2.wlinks.top/Share/POE2PriceAid/'
 }
 
 def get_next_version():

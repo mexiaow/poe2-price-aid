@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVB
                             QMessageBox, QProgressDialog)
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl
-from PyQt5.QtGui import QFont, QColor, QPalette
+from PyQt5.QtGui import QFont, QColor, QPalette, QIcon
 import json
 import os
 import time
@@ -479,6 +479,32 @@ class MainWindow(QMainWindow):
         
         # 初始计算
         self.calculate_value()
+        
+        # 在GUI初始化末尾处理图标
+        # 使用绝对路径获取图标
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的程序
+            base_path = sys._MEIPASS
+        else:
+            # 如果是源代码运行
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        icon_path = os.path.join(base_path, 'app.ico')
+        
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            # 设置应用程序图标，影响任务栏
+            if hasattr(app, 'setWindowIcon'):
+                app.setWindowIcon(QIcon(icon_path))
+            print(f"成功加载图标: {icon_path}")
+        else:
+            print(f"图标文件不存在: {icon_path}")
+            # 尝试在当前目录直接查找
+            if os.path.exists('app.ico'):
+                self.setWindowIcon(QIcon('app.ico'))
+                if hasattr(app, 'setWindowIcon'):
+                    app.setWindowIcon(QIcon('app.ico'))
+                print("使用当前目录下的app.ico")
     
     def update_price(self, currency, price):
         """更新货币价格并重新计算所有比例"""
@@ -943,6 +969,19 @@ if __name__ == "__main__":
         os.environ['PYI_APPLICATION_HOME_DIR'] = os.path.dirname(sys.executable)
     
     app = QApplication(sys.argv)
+    
+    # 在创建任何窗口前设置应用程序图标
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的程序
+        base_path = sys._MEIPASS
+    else:
+        # 如果是源代码运行
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    icon_path = os.path.join(base_path, 'app.ico')
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    
     window = MainWindow()
     window.show()
     sys.exit(app.exec_()) 

@@ -46,6 +46,9 @@ if os.path.exists(python_dll):
     # 也添加到datas确保可以找到
     a.datas += [('python310.dll', python_dll, 'DATA')]
 
+# 确保app.ico作为数据文件包含
+a.datas += [('app.ico', 'app.ico', 'DATA')]
+
 pyz = PYZ(a.pure)
 
 # 使用带版本号的文件名
@@ -71,5 +74,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='app.ico',
+    icon='app.ico',  # 确保此行正确设置了图标
 )

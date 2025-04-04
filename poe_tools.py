@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.4"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.4"
+        self.current_version = "1.0.5"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.5"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -133,6 +133,22 @@ class MainWindow(QMainWindow):
         self.prices = {"divine": 0.00, "exalted": 0.00, "chaos": 0.00}
         self.currency_names = {"divine": "神圣石", "exalted": "崇高石", "chaos": "混沌石"}
         self.currency_colors = {"divine": "#FFD700", "exalted": "#00BFFF", "chaos": "#FF6347"}
+        
+        # 增强DPI感知设置
+        if hasattr(Qt, 'AA_EnableHighDpiScaling'):
+            QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
+            QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+        
+        # 强制设置应用程序字体大小
+        app = QApplication.instance()
+        font = app.font()
+        font.setPointSize(16)  # 将14px调整为16px，更适合大多数显示器
+        app.setFont(font)
+        
+        # 禁用系统DPI缩放，使用自定义缩放
+        os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
+        os.environ["QT_SCALE_FACTOR"] = "1"
         
         # 创建UI
         self.init_ui()
@@ -182,6 +198,7 @@ class MainWindow(QMainWindow):
                 background-color: #1E1E1E;
                 color: #FFFFFF;
                 font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 16px; /* 从14px调整为16px */
             }
             QTabWidget::pane {
                 border: none;
@@ -192,11 +209,11 @@ class MainWindow(QMainWindow):
             QTabBar::tab {
                 background-color: #2D2D2D;
                 color: #CCCCCC;
-                padding: 12px 24px; /* 增加内边距，使按钮更大 */
-                margin-right: 6px; /* 增加标签之间的间距 */
+                padding: 12px 24px;
+                margin-right: 6px;
                 border: none;
                 border-radius: 6px 6px 0 0;
-                font-size: 17px; /* 增加字体大小 */
+                font-size: 16px; /* 从14px调整为16px */
                 font-weight: bold;
             }
             QTabBar::tab:selected {
@@ -448,8 +465,6 @@ class MainWindow(QMainWindow):
         """创建选项卡"""
         # 选项卡
         tab_widget = QTabWidget()
-        # 移除这行，因为我们已经在样式表中设置了标签样式
-        # tab_widget.setStyleSheet("QTabBar::tab { padding: 10px 20px; }")
         
         # 价格监控选项卡
         price_tab = QWidget()
@@ -464,30 +479,33 @@ class MainWindow(QMainWindow):
         
         # 神圣石行 - 第1行
         divine_label = QLabel("神圣石:")
-        divine_label.setStyleSheet(f"color: {self.currency_colors['divine']}; font-weight: bold;")
+        divine_label.setStyleSheet(f"color: {self.currency_colors['divine']}; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(divine_label, 0, 0)
         
         # 神圣石实时价格
         self.divine_price_label = QLabel("加载中...")
-        self.divine_price_label.setStyleSheet(f"color: #888888;")
+        self.divine_price_label.setStyleSheet(f"color: #888888; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.divine_price_label, 0, 1)
         
         # 神圣石输入框
-        self.divine_amount = QLineEdit("100")
+        self.divine_amount = QLineEdit("1")
         self.divine_amount.textChanged.connect(self.on_divine_amount_changed)
         self.divine_amount.setFocusPolicy(Qt.ClickFocus)
         self.divine_amount.setFixedWidth(80)  # 固定宽度
+        self.divine_amount.setStyleSheet("font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.divine_amount, 0, 2)
         
         # 神圣石价值
         self.divine_value = QLabel(f"￥{100 * self.prices['divine']:.2f}")
-        self.divine_value.setStyleSheet("color: #00FF00; font-weight: bold;")
+        self.divine_value.setStyleSheet("color: #00FF00; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.divine_value, 0, 3)
         
         # 神圣石兑换比例 - 放在同一单元格中
         divine_exchange = QHBoxLayout()
         self.divine_to_exalted = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
+        self.divine_to_exalted.setStyleSheet("font-size: 18px;")  # 增加字体大小
         self.divine_to_chaos = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
+        self.divine_to_chaos.setStyleSheet("font-size: 18px;")  # 增加字体大小
         divine_exchange.addWidget(self.divine_to_exalted)
         divine_exchange.addWidget(self.divine_to_chaos)
         divine_exchange_widget = QWidget()
@@ -496,12 +514,12 @@ class MainWindow(QMainWindow):
         
         # 崇高石行 - 第2行
         exalted_label = QLabel("崇高石:")
-        exalted_label.setStyleSheet(f"color: {self.currency_colors['exalted']}; font-weight: bold;")
+        exalted_label.setStyleSheet(f"color: {self.currency_colors['exalted']}; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(exalted_label, 1, 0)
         
         # 崇高石实时价格
         self.exalted_price_label = QLabel("加载中...")
-        self.exalted_price_label.setStyleSheet(f"color: #888888;")
+        self.exalted_price_label.setStyleSheet(f"color: #888888; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.exalted_price_label, 1, 1)
         
         # 崇高石输入框
@@ -509,17 +527,20 @@ class MainWindow(QMainWindow):
         self.exalted_amount.textChanged.connect(self.on_exalted_amount_changed)
         self.exalted_amount.setFocusPolicy(Qt.ClickFocus)
         self.exalted_amount.setFixedWidth(80)  # 固定宽度
+        self.exalted_amount.setStyleSheet("font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.exalted_amount, 1, 2)
         
         # 崇高石价值
         self.exalted_value = QLabel(f"￥{100 * self.prices['exalted']:.2f}")
-        self.exalted_value.setStyleSheet("color: #00FF00; font-weight: bold;")
+        self.exalted_value.setStyleSheet("color: #00FF00; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.exalted_value, 1, 3)
         
         # 崇高石兑换比例 - 放在同一单元格中
         exalted_exchange = QHBoxLayout()
         self.exalted_to_divine = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
+        self.exalted_to_divine.setStyleSheet("font-size: 18px;")  # 增加字体大小
         self.exalted_to_chaos = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
+        self.exalted_to_chaos.setStyleSheet("font-size: 18px;")  # 增加字体大小
         exalted_exchange.addWidget(self.exalted_to_divine)
         exalted_exchange.addWidget(self.exalted_to_chaos)
         exalted_exchange_widget = QWidget()
@@ -528,12 +549,12 @@ class MainWindow(QMainWindow):
         
         # 混沌石行 - 第3行
         chaos_label = QLabel("混沌石:")
-        chaos_label.setStyleSheet(f"color: {self.currency_colors['chaos']}; font-weight: bold;")
+        chaos_label.setStyleSheet(f"color: {self.currency_colors['chaos']}; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(chaos_label, 2, 0)
         
         # 混沌石实时价格
         self.chaos_price_label = QLabel("加载中...")
-        self.chaos_price_label.setStyleSheet(f"color: #888888;")
+        self.chaos_price_label.setStyleSheet(f"color: #888888; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.chaos_price_label, 2, 1)
         
         # 混沌石输入框
@@ -541,34 +562,36 @@ class MainWindow(QMainWindow):
         self.chaos_amount.textChanged.connect(self.on_chaos_amount_changed)
         self.chaos_amount.setFocusPolicy(Qt.ClickFocus)
         self.chaos_amount.setFixedWidth(80)  # 固定宽度
+        self.chaos_amount.setStyleSheet("font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.chaos_amount, 2, 2)
         
         # 混沌石价值
         self.chaos_value = QLabel(f"￥{100 * self.prices['chaos']:.2f}")
-        self.chaos_value.setStyleSheet("color: #00FF00; font-weight: bold;")
+        self.chaos_value.setStyleSheet("color: #00FF00; font-weight: bold; font-size: 18px;")  # 增加字体大小
         price_grid.addWidget(self.chaos_value, 2, 3)
         
         # 混沌石兑换比例 - 放在同一单元格中
         chaos_exchange = QHBoxLayout()
         self.chaos_to_divine = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
+        self.chaos_to_divine.setStyleSheet("font-size: 18px;")  # 增加字体大小
         self.chaos_to_exalted = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
+        self.chaos_to_exalted.setStyleSheet("font-size: 18px;")  # 增加字体大小
         chaos_exchange.addWidget(self.chaos_to_divine)
         chaos_exchange.addWidget(self.chaos_to_exalted)
         chaos_exchange_widget = QWidget()
         chaos_exchange_widget.setLayout(chaos_exchange)
         price_grid.addWidget(chaos_exchange_widget, 2, 4, 1, 2)
         
-        # 设置列伸缩因子
-        price_grid.setColumnStretch(0, 1)  # 货币名称列
-        price_grid.setColumnStretch(1, 2)  # 实时价格列
-        price_grid.setColumnStretch(2, 1)  # 数量列
-        price_grid.setColumnStretch(3, 2)  # 价值列
-        price_grid.setColumnStretch(4, 3)  # 兑换比例列
-        price_grid.setColumnStretch(5, 1)  # 额外空间列
-        
-        # 将网格布局添加到价格标签页
+        # 添加价格网格到价格标签页
         price_layout.addLayout(price_grid)
-        price_layout.addStretch()  # 添加弹性空间
+        
+        # 添加说明文本
+        price_note = QLabel("说明: 价格数据来自平台，每5分钟自动更新一次。")
+        price_note.setStyleSheet("color: #888888; margin-top: 10px; font-size: 16px;")  # 增加字体大小
+        price_layout.addWidget(price_note)
+        
+        # 添加弹性空间
+        price_layout.addStretch(1)
         
         # A大补丁选项卡 - 使用更紧凑的布局
         tools_tab = QWidget()
@@ -1267,7 +1290,7 @@ exit
             
             # 设置统一的字体大小
             font = self.font()
-            font.setPointSize(10)  # 设置统一的字体大小
+            font.setPointSize(16)  # 将14px调整为16px，更适合大多数显示器
             self.setFont(font)
             
             # 设置应用程序级别的字体
@@ -1285,11 +1308,39 @@ exit
             print(f"清理缓存时出错: {e}")
 
 if __name__ == "__main__":
+    # 在创建QApplication之前设置环境变量
+    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"  # 禁用自动缩放
+    os.environ["QT_FONT_DPI"] = "96"  # 设置固定DPI值，确保字体大小一致
+    
     # 设置环境变量，确保PyInstaller能找到临时目录
     if getattr(sys, 'frozen', False):
         os.environ['PYI_APPLICATION_HOME_DIR'] = os.path.dirname(sys.executable)
     
     app = QApplication(sys.argv)
+    
+    # 检测屏幕DPI并调整字体大小
+    screen = app.primaryScreen()
+    dpi = screen.logicalDotsPerInch()
+    
+    # 根据DPI调整字体大小
+    base_size = 16  # 基础字体大小
+    if dpi > 120:
+        # 高DPI屏幕
+        font_size = base_size - 1  # 略小一点
+    elif dpi < 96:
+        # 低DPI屏幕
+        font_size = base_size + 1  # 略大一点
+    else:
+        # 标准DPI屏幕
+        font_size = base_size
+    
+    # 强制设置应用程序字体
+    font = QFont("Microsoft YaHei")
+    font.setPixelSize(font_size)
+    app.setFont(font)
+    
+    # 同时设置环境变量
+    os.environ["QT_FONT_DPI"] = str(int(dpi))
     
     # 在创建任何窗口前设置应用程序图标
     if getattr(sys, 'frozen', False):

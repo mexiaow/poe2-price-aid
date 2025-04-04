@@ -60,8 +60,14 @@ class PriceScraper(QThread):
         
     def run(self):
         for currency, url in self.urls.items():
-            price = self.get_price(url)
-            self.price_updated.emit(currency, price)
+            try:
+                price = self.get_price(url)
+                if price > 0:  # 只有当价格有效时才发送信号
+                    self.price_updated.emit(currency, price)
+                    # 添加短暂延迟，避免请求过快
+                    self.msleep(500)
+            except Exception as e:
+                print(f"爬取{currency}价格时出错: {e}")
     
     def get_price(self, url):
         try:
@@ -168,6 +174,7 @@ class MainWindow(QMainWindow):
         # 启动价格更新线程
         self.price_thread = PriceScraper()
         self.price_thread.price_updated.connect(self.update_price)
+        self.price_thread.finished.connect(self.on_price_refresh_finished)  # 添加完成信号处理
         self.price_thread.start()
         
         # 设置自动更新检查
@@ -349,126 +356,160 @@ class MainWindow(QMainWindow):
         tab_widget = QTabWidget()
         tab_widget.setStyleSheet("QTabBar::tab { padding: 10px 20px; }")
         
-        # 价格监控选项卡
+        # 价格监控选项卡 - 直接在标签页中显示内容，不使用子GroupBox
         price_tab = QWidget()
         price_layout = QVBoxLayout(price_tab)
-        price_layout.setContentsMargins(0, 10, 0, 0)
+        price_layout.setContentsMargins(20, 20, 20, 20)
         
-        # 价值计算面板（整合实时价格和兑换比例）
-        value_group = QGroupBox("价格与兑换")
-        value_layout = QGridLayout(value_group)
-        value_layout.setColumnStretch(2, 1)  # 让价值列有更多空间
+        # 价格监控网格布局 - 直接添加到价格标签页
+        price_grid = QGridLayout()
+        price_grid.setColumnStretch(3, 1)  # 让价值列有更多空间
         
-        # 神圣石输入 - 修改标签格式
-        divine_label = QLabel("神圣石/个:")
+        # 神圣石输入 - 恢复标签
+        divine_label = QLabel("神圣石:")
         divine_label.setStyleSheet(f"color: {self.currency_colors['divine']}; font-weight: bold;")
-        value_layout.addWidget(divine_label, 0, 0)
-        
-        # 神圣石实时价格 - 添加颜色
+        price_grid.addWidget(divine_label, 0, 0)
+
+        # 神圣石实时价格 - 初始设置为灰色的"加载中..."
         self.divine_price_label = QLabel("加载中...")
-        self.divine_price_label.setStyleSheet(f"color: {self.currency_colors['divine']};")
-        value_layout.addWidget(self.divine_price_label, 0, 1)
-        
+        self.divine_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        price_grid.addWidget(self.divine_price_label, 0, 1)
+
+        # 神圣石输入框
         self.divine_amount = QLineEdit("100")
-        self.divine_amount.textChanged.connect(self.calculate_value)
+        self.divine_amount.textChanged.connect(self.on_divine_amount_changed)
         self.divine_amount.setFocusPolicy(Qt.ClickFocus)
-        value_layout.addWidget(self.divine_amount, 0, 2)
-        
+        price_grid.addWidget(self.divine_amount, 0, 2)
+
         self.divine_value = QLabel(f"￥{100 * self.prices['divine']:.2f}")
         self.divine_value.setStyleSheet("color: #00FF00; font-weight: bold;")
-        value_layout.addWidget(self.divine_value, 0, 3)
-        
+        price_grid.addWidget(self.divine_value, 0, 3)
+
         # 神圣石兑换比例
         self.divine_to_exalted = QLabel()
         self.divine_to_chaos = QLabel()
         self.divine_to_exalted.setText(f"<span style='color:{self.currency_colors['divine']}'>100D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
         self.divine_to_chaos.setText(f"<span style='color:{self.currency_colors['divine']}'>100D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
-        value_layout.addWidget(self.divine_to_exalted, 0, 4)
-        value_layout.addWidget(self.divine_to_chaos, 0, 5)
-        
-        # 崇高石输入 - 修改标签格式
-        exalted_label = QLabel("崇高石/个:")
+        price_grid.addWidget(self.divine_to_exalted, 0, 4)
+        price_grid.addWidget(self.divine_to_chaos, 0, 5)
+
+        # 崇高石输入 - 恢复标签
+        exalted_label = QLabel("崇高石:")
         exalted_label.setStyleSheet(f"color: {self.currency_colors['exalted']}; font-weight: bold;")
-        value_layout.addWidget(exalted_label, 1, 0)
-        
-        # 崇高石实时价格 - 添加颜色
+        price_grid.addWidget(exalted_label, 1, 0)
+
+        # 崇高石实时价格 - 初始设置为灰色
         self.exalted_price_label = QLabel("加载中...")
-        self.exalted_price_label.setStyleSheet(f"color: {self.currency_colors['exalted']};")
-        value_layout.addWidget(self.exalted_price_label, 1, 1)
-        
+        self.exalted_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        price_grid.addWidget(self.exalted_price_label, 1, 1)
+
+        # 崇高石输入框
         self.exalted_amount = QLineEdit("100")
-        self.exalted_amount.textChanged.connect(self.calculate_value)
+        self.exalted_amount.textChanged.connect(self.on_exalted_amount_changed)
         self.exalted_amount.setFocusPolicy(Qt.ClickFocus)
-        value_layout.addWidget(self.exalted_amount, 1, 2)
-        
+        price_grid.addWidget(self.exalted_amount, 1, 2)
+
         self.exalted_value = QLabel(f"￥{100 * self.prices['exalted']:.2f}")
         self.exalted_value.setStyleSheet("color: #00FF00; font-weight: bold;")
-        value_layout.addWidget(self.exalted_value, 1, 3)
-        
+        price_grid.addWidget(self.exalted_value, 1, 3)
+
         # 崇高石兑换比例
         self.exalted_to_divine = QLabel()
         self.exalted_to_chaos = QLabel()
         self.exalted_to_divine.setText(f"<span style='color:{self.currency_colors['exalted']}'>100E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
         self.exalted_to_chaos.setText(f"<span style='color:{self.currency_colors['exalted']}'>100E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
-        value_layout.addWidget(self.exalted_to_divine, 1, 4)
-        value_layout.addWidget(self.exalted_to_chaos, 1, 5)
-        
-        # 混沌石输入 - 修改标签格式
-        chaos_label = QLabel("混沌石/个:")
+        price_grid.addWidget(self.exalted_to_divine, 1, 4)
+        price_grid.addWidget(self.exalted_to_chaos, 1, 5)
+
+        # 混沌石输入 - 恢复标签
+        chaos_label = QLabel("混沌石:")
         chaos_label.setStyleSheet(f"color: {self.currency_colors['chaos']}; font-weight: bold;")
-        value_layout.addWidget(chaos_label, 2, 0)
-        
-        # 混沌石实时价格 - 添加颜色
+        price_grid.addWidget(chaos_label, 2, 0)
+
+        # 混沌石实时价格 - 初始设置为灰色
         self.chaos_price_label = QLabel("加载中...")
-        self.chaos_price_label.setStyleSheet(f"color: {self.currency_colors['chaos']};")
-        value_layout.addWidget(self.chaos_price_label, 2, 1)
-        
+        self.chaos_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        price_grid.addWidget(self.chaos_price_label, 2, 1)
+
+        # 混沌石输入框
         self.chaos_amount = QLineEdit("100")
-        self.chaos_amount.textChanged.connect(self.calculate_value)
+        self.chaos_amount.textChanged.connect(self.on_chaos_amount_changed)
         self.chaos_amount.setFocusPolicy(Qt.ClickFocus)
-        value_layout.addWidget(self.chaos_amount, 2, 2)
-        
+        price_grid.addWidget(self.chaos_amount, 2, 2)
+
         self.chaos_value = QLabel(f"￥{100 * self.prices['chaos']:.2f}")
         self.chaos_value.setStyleSheet("color: #00FF00; font-weight: bold;")
-        value_layout.addWidget(self.chaos_value, 2, 3)
+        price_grid.addWidget(self.chaos_value, 2, 3)
         
-        # 混沌石兑换比例
+        # 混沌石兑换比例 - 恢复这部分代码
         self.chaos_to_divine = QLabel()
         self.chaos_to_exalted = QLabel()
         self.chaos_to_divine.setText(f"<span style='color:{self.currency_colors['chaos']}'>100C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
         self.chaos_to_exalted.setText(f"<span style='color:{self.currency_colors['chaos']}'>100C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
-        value_layout.addWidget(self.chaos_to_divine, 2, 4)
-        value_layout.addWidget(self.chaos_to_exalted, 2, 5)
+        price_grid.addWidget(self.chaos_to_divine, 2, 4)
+        price_grid.addWidget(self.chaos_to_exalted, 2, 5)
         
-        price_layout.addWidget(value_group)
+        # 将网格布局添加到价格标签页
+        price_layout.addLayout(price_grid)
+        price_layout.addStretch()  # 添加弹性空间
         
-        # 快捷功能选项卡
+        # A大补丁选项卡 - 使用更紧凑的布局
         tools_tab = QWidget()
         tools_layout = QVBoxLayout(tools_tab)
-        tools_layout.setContentsMargins(0, 10, 0, 0)
+        tools_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
+        tools_layout.setSpacing(5)  # 减小间距
         
-        tools_group = QGroupBox("常用工具")
-        tools_group_layout = QVBoxLayout(tools_group)
+        # 标题和内容样式
+        title_style = "font-size: 24px; margin-bottom: 10px; font-weight: bold;"
+        content_style = "font-size: 18px; margin-bottom: 5px;"
         
-        # 使用更好看的按钮
-        ad_patch_button = QPushButton("A大补丁")
-        ad_patch_button.setIcon(self.style().standardIcon(self.style().SP_DialogOpenButton))
-        ad_patch_button.clicked.connect(lambda: webbrowser.open("https://www.caimogu.cc/post/1615417.html"))
+        # 下载部分 - 标题和链接在同一行
+        download_layout = QHBoxLayout()
+        download_title = QLabel("下载最新版本：")
+        download_title.setStyleSheet(title_style)
+        download_layout.addWidget(download_title)
         
-        easy_refresh_button = QPushButton("易刷")
-        easy_refresh_button.setIcon(self.style().standardIcon(self.style().SP_DialogOpenButton))
-        easy_refresh_button.clicked.connect(lambda: webbrowser.open("https://www.caimogu.cc/post/1621584.html"))
+        # 增加链接字体大小
+        download_link = QLabel("<a href='https://cyurl.cn/poe2ada' style='color: #0078d7;'>https://cyurl.cn/poe2ada</a>")
+        download_link.setOpenExternalLinks(True)
+        download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
+        download_layout.addWidget(download_link)
+        download_layout.addStretch()  # 添加弹性空间，使链接靠左
         
-        tools_group_layout.addWidget(ad_patch_button)
-        tools_group_layout.addWidget(easy_refresh_button)
-        tools_group_layout.addStretch()
+        tools_layout.addLayout(download_layout)
         
-        tools_layout.addWidget(tools_group)
-        tools_layout.addStretch()
+        # 添加一些空间，但减少高度
+        spacer = QLabel("")
+        spacer.setStyleSheet("margin-top: 10px;")
+        tools_layout.addWidget(spacer)
         
-        # 添加选项卡
+        # 使用方法部分
+        usage_title = QLabel("使用方法：")
+        usage_title.setStyleSheet(title_style)
+        tools_layout.addWidget(usage_title)
+        
+        # 使用垂直布局来放置步骤
+        steps_layout = QVBoxLayout()
+        steps_layout.setSpacing(2)  # 减小步骤之间的间距
+        
+        # 使用单独的标签显示每个步骤
+        step1 = QLabel("1.打开VisualGGPK3")
+        step2 = QLabel("2.选择POE2根目录Content.ggpk")
+        step3 = QLabel("3.然后将你需要的补丁zip压缩包直接拖进VisualGGPK3窗口")
+        
+        for step in [step1, step2, step3]:
+            step.setStyleSheet(content_style)
+            steps_layout.addWidget(step)
+        
+        tools_layout.addLayout(steps_layout)
+        
+        # 不需要太多的弹性空间
+        tools_layout.addStretch(1)
+        
+        # 添加主选项卡
+        tab_widget.clear()  # 清除所有现有标签
         tab_widget.addTab(price_tab, "价格监控")
-        tab_widget.addTab(tools_tab, "快捷功能")
+        tab_widget.addTab(tools_tab, "A大补丁")
         
         main_layout.addWidget(tab_widget)
         
@@ -505,51 +546,99 @@ class MainWindow(QMainWindow):
                 if hasattr(app, 'setWindowIcon'):
                     app.setWindowIcon(QIcon('app.ico'))
                 print("使用当前目录下的app.ico")
+        
+        # 在init_ui方法中，添加调试输出
+        print("初始化UI完成，设置输入框信号连接")
+        print(f"神圣石输入框: {self.divine_amount}")
+        print(f"崇高石输入框: {self.exalted_amount}")
+        print(f"混沌石输入框: {self.chaos_amount}")
     
     def update_price(self, currency, price):
         """更新货币价格并重新计算所有比例"""
         # 更新价格数据
         self.prices[currency] = price
         
-        # 更新价格显示 - 保持4位小数
+        # 更新价格显示 - 保持4位小数，并恢复颜色
         price_label = getattr(self, f"{currency}_price_label", None)
         if price_label:
-            price_label.setText(f"￥{price:.4f}/个")
+            price_label.setText(f"￥{price:.4f}/个")  # 恢复"/个"后缀
+            price_label.setStyleSheet(f"color: {self.currency_colors[currency]};")  # 恢复颜色
         
         # 更新价值
         self.calculate_value()
         
-        # 重要：每次任何价格更新时重新计算所有兑换比例
-        self.calculate_exchange_rates()
+        # 重要：直接更新兑换比例，不依赖于calculate_value
+        self.update_exchange_rates()
         
         # 添加日志以便排查问题
         print(f"更新{self.currency_names[currency]}价格: {price}")
         print(f"当前价格数据: {self.prices}")
+        print(f"兑换比例已更新")
     
     def refresh_prices(self):
-        """手动刷新价格数据"""
-        # 清除旧价格标记为刷新中
-        for currency in self.prices:
-            price_label = getattr(self, f"{currency}_price_label", None)
-            if price_label:
-                price_label.setText("正在刷新...")
-        
-        # 强制停止旧线程(如果存在)并创建新线程
-        if hasattr(self, 'price_thread') and self.price_thread.isRunning():
-            self.price_thread.terminate()
-            self.price_thread.wait()
-        
-        # 启动新的价格更新线程
+        """刷新价格数据"""
+        try:
+            # 检查是否已经有一个刷新线程在运行
+            if hasattr(self, 'price_thread') and self.price_thread.isRunning():
+                print("已有价格更新线程在运行，请等待完成")
+                return
+            
+            # 更新UI显示为"加载中..."
+            for currency in self.currency_names:
+                price_label = getattr(self, f"{currency}_price_label", None)
+                if price_label:
+                    price_label.setText("加载中...")  # 统一使用"加载中..."
+                    price_label.setStyleSheet(f"color: #888888;")  # 设置为灰色
+            
+            # 创建新的价格爬取线程
             self.price_thread = PriceScraper()
             self.price_thread.price_updated.connect(self.update_price)
+            
+            # 添加完成信号处理
+            self.price_thread.finished.connect(self.on_price_refresh_finished)
+            
+            # 启动线程
             self.price_thread.start()
+            
+            print("价格刷新线程已启动")
+        except Exception as e:
+            print(f"刷新价格时出错: {e}")
+            # 恢复原来的价格显示
+            self.update_all_price_displays()
+
+    def on_price_refresh_finished(self):
+        """价格刷新完成后的处理"""
+        print("价格刷新完成")
+        # 恢复价格标签的颜色
+        for currency in self.currency_names:
+            price_label = getattr(self, f"{currency}_price_label", None)
+            if price_label:
+                price_label.setStyleSheet(f"color: {self.currency_colors[currency]};")
+        
+        # 确保所有价格显示都已更新
+        self.update_all_price_displays()
+
+    def update_all_price_displays(self):
+        """更新所有价格显示"""
+        for currency in self.currency_names:
+            price = self.prices[currency]
+            price_label = getattr(self, f"{currency}_price_label", None)
+            if price_label:
+                price_label.setText(f"￥{price:.4f}/个")  # 恢复"/个"后缀
+                price_label.setStyleSheet(f"color: {self.currency_colors[currency]};")
+        
+        # 重新计算价值和兑换比例
+        self.calculate_value()
     
     def calculate_value(self):
+        """计算货币价值"""
         try:
-            divine_amount = int(self.divine_amount.text() or "0")
-            exalted_amount = int(self.exalted_amount.text() or "0")
-            chaos_amount = int(self.chaos_amount.text() or "0")
+            # 获取输入值 - 使用float而不是int，以支持小数输入
+            divine_amount = float(self.divine_amount.text() or "0")
+            exalted_amount = float(self.exalted_amount.text() or "0")
+            chaos_amount = float(self.chaos_amount.text() or "0")
             
+            # 计算价值
             divine_value = divine_amount * self.prices["divine"]
             exalted_value = exalted_amount * self.prices["exalted"]
             chaos_value = chaos_amount * self.prices["chaos"]
@@ -559,68 +648,81 @@ class MainWindow(QMainWindow):
             self.exalted_value.setText(f"￥{exalted_value:.2f}")
             self.chaos_value.setText(f"￥{chaos_value:.2f}")
             
-            # 同时更新兑换比例
-            self.calculate_exchange_rates()
-        except ValueError:
-            pass
+            # 重要：直接更新兑换比例，不依赖于其他方法
+            self.update_exchange_rates()
+            
+            # 添加调试输出
+            print(f"计算价值被调用，当前价格: {self.prices}")
+            print(f"计算价值: 神圣石={divine_amount}, 崇高石={exalted_amount}, 混沌石={chaos_amount}")
+            print(f"价值结果: 神圣石=￥{divine_value:.2f}, 崇高石=￥{exalted_value:.2f}, 混沌石=￥{chaos_value:.2f}")
+            print(f"兑换比例已更新")
+        except (ValueError, AttributeError) as e:
+            print(f"计算价值时出错: {e}")
+            # 即使出错，也尝试更新兑换比例
+            try:
+                self.update_exchange_rates()
+            except Exception as e2:
+                print(f"尝试更新兑换比例时出错: {e2}")
     
-    def calculate_exchange_rates(self):
-        """计算并更新所有货币间的兑换比例"""
+    def update_exchange_rates(self):
+        """更新所有兑换比例"""
         # 防止除以零
-        if self.prices['exalted'] > 0 and self.prices['divine'] > 0 and self.prices['chaos'] > 0:
-            # 计算100个神圣石兑换到其他货币的比例
-            divine_100 = 100
-            exalted_rate = round(divine_100 * (self.prices['divine'] / self.prices['exalted']))
-            chaos_rate = round(divine_100 * (self.prices['divine'] / self.prices['chaos']))
+        if self.prices['divine'] <= 0 or self.prices['exalted'] <= 0 or self.prices['chaos'] <= 0:
+            print("无法更新兑换比例: 价格中有零值")
+            return
+        
+        try:
+            print("开始更新兑换比例...")
+            print(f"当前价格: 神圣石={self.prices['divine']}, 崇高石={self.prices['exalted']}, 混沌石={self.prices['chaos']}")
             
-            # 更新比例显示
-            self.divine_to_exalted.setText(
-                f"<span style='color:{self.currency_colors['divine']}'>100D</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['exalted']}'>{exalted_rate}E</span>"
-            )
-            self.divine_to_chaos.setText(
-                f"<span style='color:{self.currency_colors['divine']}'>100D</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['chaos']}'>{chaos_rate}C</span>"
-            )
+            # 获取用户输入的货币数量
+            divine_amount = float(self.divine_amount.text() or "0")
+            exalted_amount = float(self.exalted_amount.text() or "0")
+            chaos_amount = float(self.chaos_amount.text() or "0")
             
-            # 计算100个崇高石兑换到其他货币的比例
-            exalted_100 = 100
-            divine_rate = round(exalted_100 * (self.prices['exalted'] / self.prices['divine']))
-            chaos_rate = round(exalted_100 * (self.prices['exalted'] / self.prices['chaos']))
+            # 计算兑换比例
+            # 神圣石兑换比例
+            divine_to_exalted_ratio = self.prices["divine"] / self.prices["exalted"] if self.prices["exalted"] > 0 else 0
+            divine_to_chaos_ratio = self.prices["divine"] / self.prices["chaos"] if self.prices["chaos"] > 0 else 0
             
-            # 更新比例显示
-            self.exalted_to_divine.setText(
-                f"<span style='color:{self.currency_colors['exalted']}'>100E</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['divine']}'>{divine_rate}D</span>"
-            )
-            self.exalted_to_chaos.setText(
-                f"<span style='color:{self.currency_colors['exalted']}'>100E</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['chaos']}'>{chaos_rate}C</span>"
-            )
+            # 崇高石兑换比例
+            exalted_to_divine_ratio = self.prices["exalted"] / self.prices["divine"] if self.prices["divine"] > 0 else 0
+            exalted_to_chaos_ratio = self.prices["exalted"] / self.prices["chaos"] if self.prices["chaos"] > 0 else 0
             
-            # 计算100个混沌石兑换到其他货币的比例
-            chaos_100 = 100
-            divine_rate = round(chaos_100 * (self.prices['chaos'] / self.prices['divine']))
-            exalted_rate = round(chaos_100 * (self.prices['chaos'] / self.prices['exalted']))
+            # 混沌石兑换比例
+            chaos_to_divine_ratio = self.prices["chaos"] / self.prices["divine"] if self.prices["divine"] > 0 else 0
+            chaos_to_exalted_ratio = self.prices["chaos"] / self.prices["exalted"] if self.prices["exalted"] > 0 else 0
             
-            # 更新比例显示
-            self.chaos_to_divine.setText(
-                f"<span style='color:{self.currency_colors['chaos']}'>100C</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['divine']}'>{divine_rate}D</span>"
-            )
-            self.chaos_to_exalted.setText(
-                f"<span style='color:{self.currency_colors['chaos']}'>100C</span>"
-                f"<span style='color:white'>≈</span>"
-                f"<span style='color:{self.currency_colors['exalted']}'>{exalted_rate}E</span>"
-            )
+            # 更新兑换比例标签 - 使用HTML格式和颜色
+            divine_to_exalted_text = f"<span style='color:{self.currency_colors['divine']}'>{divine_amount}D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(divine_amount * divine_to_exalted_ratio)}E</span>"
+            divine_to_chaos_text = f"<span style='color:{self.currency_colors['divine']}'>{divine_amount}D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(divine_amount * divine_to_chaos_ratio)}C</span>"
             
-            # 添加日志输出
-            print(f"神圣石兑换比例: 100D ≈ {exalted_rate}E ≈ {chaos_rate}C")
+            self.divine_to_exalted.setText(divine_to_exalted_text)
+            self.divine_to_chaos.setText(divine_to_chaos_text)
+            
+            exalted_to_divine_text = f"<span style='color:{self.currency_colors['exalted']}'>{exalted_amount}E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(exalted_amount * exalted_to_divine_ratio)}D</span>"
+            exalted_to_chaos_text = f"<span style='color:{self.currency_colors['exalted']}'>{exalted_amount}E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(exalted_amount * exalted_to_chaos_ratio)}C</span>"
+            
+            self.exalted_to_divine.setText(exalted_to_divine_text)
+            self.exalted_to_chaos.setText(exalted_to_chaos_text)
+            
+            chaos_to_divine_text = f"<span style='color:{self.currency_colors['chaos']}'>{chaos_amount}C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(chaos_amount * chaos_to_divine_ratio)}D</span>"
+            chaos_to_exalted_text = f"<span style='color:{self.currency_colors['chaos']}'>{chaos_amount}C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(chaos_amount * chaos_to_exalted_ratio)}E</span>"
+            
+            self.chaos_to_divine.setText(chaos_to_divine_text)
+            self.chaos_to_exalted.setText(chaos_to_exalted_text)
+            
+            # 强制更新UI
+            QApplication.processEvents()
+            
+            print("兑换比例更新完成:")
+            print(f"神圣石兑换: {divine_to_exalted_text} | {divine_to_chaos_text}")
+            print(f"崇高石兑换: {exalted_to_divine_text} | {exalted_to_chaos_text}")
+            print(f"混沌石兑换: {chaos_to_divine_text} | {chaos_to_exalted_text}")
+        except Exception as e:
+            print(f"更新兑换比例时出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     def eventFilter(self, obj, event):
         # 当点击主窗口其他区域时，清除所有输入框的焦点
@@ -962,6 +1064,66 @@ exit
     def cancel_download(self):
         self.download_canceled = True
         self.is_updating = False
+
+    def on_divine_amount_changed(self, text):
+        """处理神圣石数量变化"""
+        try:
+            if not text:
+                return
+            
+            # 计算价值
+            amount = float(text)
+            value = amount * self.prices["divine"]
+            
+            # 更新价值标签
+            self.divine_value.setText(f"￥{value:.2f}")
+            
+            # 直接更新兑换比例
+            self.update_exchange_rates()
+            
+            print(f"神圣石数量变更为{amount}，价值为￥{value:.2f}")
+        except ValueError as e:
+            print(f"处理神圣石数量变化时出错: {e}")
+
+    def on_exalted_amount_changed(self, text):
+        """处理崇高石数量变化"""
+        try:
+            if not text:
+                return
+            
+            # 计算价值
+            amount = float(text)
+            value = amount * self.prices["exalted"]
+            
+            # 更新价值标签
+            self.exalted_value.setText(f"￥{value:.2f}")
+            
+            # 直接更新兑换比例
+            self.update_exchange_rates()
+            
+            print(f"崇高石数量变更为{amount}，价值为￥{value:.2f}")
+        except ValueError as e:
+            print(f"处理崇高石数量变化时出错: {e}")
+
+    def on_chaos_amount_changed(self, text):
+        """处理混沌石数量变化"""
+        try:
+            if not text:
+                return
+            
+            # 计算价值
+            amount = float(text)
+            value = amount * self.prices["chaos"]
+            
+            # 更新价值标签
+            self.chaos_value.setText(f"￥{value:.2f}")
+            
+            # 直接更新兑换比例
+            self.update_exchange_rates()
+            
+            print(f"混沌石数量变更为{amount}，价值为￥{value:.2f}")
+        except ValueError as e:
+            print(f"处理混沌石数量变化时出错: {e}")
 
 if __name__ == "__main__":
     # 设置环境变量，确保PyInstaller能找到临时目录

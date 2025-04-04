@@ -41,9 +41,9 @@ class PriceScraper(QThread):
     def __init__(self):
         super().__init__()
         self.urls = {
-            "divine": "https://www.dd373.com/s-3hcpqw-c-8rknmp-bwgvrk-nxspw7.html",
-            "exalted": "https://www.dd373.com/s-3hcpqw-c-tqcbc6-bwgvrk-nxspw7.html",
-            "chaos": "https://www.dd373.com/s-3hcpqw-c-henjrw-bwgvrk-nxspw7.html"
+            "divine": "https://www.dd373.com/s-3hcpqw-c-8rknmp-bwgvrk-1mbdfs.html",
+            "exalted": "https://www.dd373.com/s-3hcpqw-c-tqcbc6-bwgvrk-1mbdfs.html",
+            "chaos": "https://www.dd373.com/s-3hcpqw-c-henjrw-bwgvrk-1mbdfs.html"
         }
         
     def run(self):
@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.5"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.5"
+        self.current_version = "1.0.6"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.6"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False

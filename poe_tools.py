@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.6"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v1.0.6"
+        self.current_version = "1.0.2"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.2"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -576,7 +576,7 @@ class MainWindow(QMainWindow):
         tools_layout.addWidget(download_title)
         
         # 增加链接字体大小
-        download_link = QLabel("<a href='https://cyurl.cn/poe2ada' style='color: #0078d7;'>https://cyurl.cn/poe2ada</a>")
+        download_link = QLabel("<a href='https://cloud.xiaow.org:8443/s/vmIj' style='color: #0078d7;'>https://cloud.xiaow.org:8443/s/vmIj</a>")
         download_link.setOpenExternalLinks(True)
         download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
         tools_layout.addWidget(download_link)

@@ -81,7 +81,7 @@ def update_version_in_source(new_version):
     """更新poe_tools.py中的版本号和更新URL"""
     file_path = 'poe_tools.py'
     version_pattern = r'(self\.current_version\s*=\s*["\'])([0-9.]+)(["\'])'
-    url_pattern = r'(self\.update_url\s*=\s*["\'])(https://gitee\.com/mexiaow/poe2-price-aid/raw/main/update\.json)(\?v[0-9.]+)?(["\'])'
+    url_pattern = r'(self\.update_url\s*=\s*["\'])(https://gitee\.com/mexiaow/poe2-price-aid/raw/main/update\.json)(\?v=[0-9.]+)?(["\'])'
     
     try:
         # 检测文件编码
@@ -96,14 +96,14 @@ def update_version_in_source(new_version):
         updated_content = re.sub(version_pattern, r'\g<1>' + new_version + r'\g<3>', content)
         
         # 替换更新URL中的版本参数
-        updated_content = re.sub(url_pattern, r'\g<1>\g<2>?v' + new_version + r'\g<4>', updated_content)
+        updated_content = re.sub(url_pattern, r'\g<1>\g<2>?v=' + new_version + r'\g<4>', updated_content)
         
         # 使用相同的编码写回文件
         with open(file_path, 'w', encoding=encoding) as f:
             f.write(updated_content)
         
         print(f"✅ 已将poe_tools.py中的版本号更新为: {new_version}")
-        print(f"✅ 已更新update_url中的版本参数为: ?v{new_version}")
+        print(f"✅ 已更新update_url中的版本参数为: ?v={new_version}")
         return True
     except Exception as e:
         print(f"❌ 更新poe_tools.py版本号和URL失败: {e}")

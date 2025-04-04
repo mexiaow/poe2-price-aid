@@ -30,22 +30,8 @@ if getattr(sys, 'frozen', False):
         dll_path = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)), 'python310.dll')
         if os.path.exists(dll_path):
             ctypes.CDLL(dll_path)
-            print(f"成功加载 Python DLL: {dll_path}")
     except Exception as e:
-        print(f"加载 Python DLL 失败: {e}")
-
-    # 在程序开头添加
-    print(f"应用程序路径: {sys.executable}")
-    print(f"临时目录: {getattr(sys, '_MEIPASS', 'Not found')}")
-    print(f"当前环境变量PATH: {os.environ['PATH']}")
-    
-    # 列出_MEIPASS中的文件
-    if hasattr(sys, '_MEIPASS'):
-        print("临时目录中的文件:")
-        for root, dirs, files in os.walk(sys._MEIPASS):
-            for file in files:
-                if file.endswith('.dll'):
-                    print(f" - {os.path.join(root, file)}")
+        pass
 
 class PriceScraper(QThread):
     price_updated = pyqtSignal(str, float)
@@ -67,7 +53,7 @@ class PriceScraper(QThread):
                     # 添加短暂延迟，避免请求过快
                     self.msleep(500)
             except Exception as e:
-                print(f"爬取{currency}价格时出错: {e}")
+                pass
     
     def get_price(self, url):
         try:
@@ -76,8 +62,6 @@ class PriceScraper(QThread):
             }
             response = requests.get(url, headers=headers)
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            print(f"爬取URL: {url}")
             
             # 首先尝试用户提供的CSS选择器
             css_selector = "div.good-list-box > div:nth-child(1) > div.width233.p-l30 > div.p-r66 > p.font12.color666.m-t5"
@@ -100,46 +84,23 @@ class PriceScraper(QThread):
             
             if price_element:
                 price_text = price_element.text.strip()
-                print(f"找到价格文本: {price_text}")
                 match = re.search(r'(\d+\.\d+)', price_text)
                 if match:
                     price = float(match.group(1))
-                    print(f"提取价格: {price}")
                     return price
-                else:
-                    print(f"未能从文本中提取价格: {price_text}")
             else:
                 # 如果所有选择器都失败，尝试使用更通用的方法
                 all_price_elements = soup.select('p.font12.color666')
                 for element in all_price_elements:
                     price_text = element.text.strip()
-                    print(f"检查潜在价格文本: {price_text}")
                     match = re.search(r'(\d+\.\d+)', price_text)
                     if match:
                         price = float(match.group(1))
-                        print(f"从通用搜索中提取价格: {price}")
                         return price
-                
-                print("未找到价格元素，尝试更广泛的搜索")
-                # 搜索页面中所有包含价格模式的文本
-                all_elements = soup.find_all(['p', 'div', 'span'])
-                for element in all_elements:
-                    if '元/个' in element.text or '￥' in element.text:
-                        price_text = element.text.strip()
-                        match = re.search(r'(\d+\.\d+)', price_text)
-                        if match:
-                            price = float(match.group(1))
-                            print(f"从广泛搜索中提取价格: {price}")
-                            return price
-                            
-                print("未找到任何价格元素")
         except Exception as e:
-            print(f"爬取价格出错: {e}")
-            import traceback
-            traceback.print_exc()
+            pass
         
         # 价格获取失败时返回0
-        print(f"价格获取失败，URL: {url}")
         return 0.0
 
 class MainWindow(QMainWindow):
@@ -147,7 +108,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.3"  # 确保在使用之前初始化
+        self.current_version = "1.0.2"  # 确保在使用之前初始化
         self.update_url = "https://raw.githubusercontent.com/mexiaow/poe_tools/refs/heads/main/update.json"
         
         # 添加更新标志，避免重复检查
@@ -322,15 +283,95 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(main_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         
+        self.create_header(main_layout)
+        self.create_tabs(main_layout)
+        
+        self.setCentralWidget(main_widget)
+        
+        # 添加事件过滤器，处理点击其他区域时清除焦点
+        main_widget.installEventFilter(self)
+        
+        # 初始计算
+        self.calculate_value()
+        
+        # 在GUI初始化末尾处理图标
+        # 使用绝对路径获取图标
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的程序
+            base_path = sys._MEIPASS
+        else:
+            # 如果是源代码运行
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        icon_path = os.path.join(base_path, 'app.ico')
+        
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            # 设置应用程序图标，影响任务栏
+            if hasattr(app, 'setWindowIcon'):
+                app.setWindowIcon(QIcon(icon_path))
+        else:
+            # 尝试在当前目录直接查找
+            if os.path.exists('app.ico'):
+                self.setWindowIcon(QIcon('app.ico'))
+                if hasattr(app, 'setWindowIcon'):
+                    app.setWindowIcon(QIcon('app.ico'))
+    
+    def create_header(self, parent_layout):
+        """创建标题和按钮"""
         # 顶部标题和按钮
-        header_layout = QHBoxLayout()
+        header_layout = QHBoxLayout()  # 使用水平布局，所有元素在同一行
         
         # 左侧标题
         title_label = QLabel("POE2PriceAid")
         title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
         header_layout.addWidget(title_label)
         
-        # 添加弹性空间，将按钮推到右侧
+        # 添加导航按钮 - 放在标题右侧，功能按钮左侧
+        # 导航按钮样式 - 更大的字体和统一的颜色
+        nav_button_style = """
+            QPushButton {
+                background-color: transparent;
+                color: #0078D7;
+                border: none;
+                padding: 4px 12px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #1C86E0;
+                border-bottom: 2px solid #1C86E0;
+            }
+            QPushButton:pressed {
+                color: #005A9E;
+            }
+        """
+        
+        # 创建导航按钮函数
+        def create_nav_button(text, url):
+            button = QPushButton(text)
+            button.setStyleSheet(nav_button_style)
+            button.clicked.connect(lambda: webbrowser.open(url))
+            button.setFixedHeight(30)  # 增加高度，使按钮更大
+            return button
+        
+        # 添加导航按钮
+        nav_buttons = [
+            ("编年史", "https://poe2db.tw/cn/"),
+            ("官网", "https://pathofexile2.com/home"),
+            ("市集", "https://www.pathofexile.com/trade2/search/poe2/Standard"),
+            ("忍者", "https://poe2.ninja/builds/"),
+            ("踩蘑菇", "https://www.caimogu.cc/circle/449.html")
+        ]
+        
+        # 添加一个小的分隔符
+        header_layout.addSpacing(15)
+        
+        # 添加导航按钮
+        for text, url in nav_buttons:
+            header_layout.addWidget(create_nav_button(text, url))
+        
+        # 添加弹性空间，将功能按钮推到右侧
         header_layout.addStretch()
         
         # 右侧按钮组 - 使用水平布局将按钮放在一起
@@ -340,114 +381,171 @@ class MainWindow(QMainWindow):
         # 刷新价格按钮
         refresh_button = QPushButton("刷新价格")
         refresh_button.clicked.connect(self.refresh_prices)
+        refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078D7;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1C86E0;
+            }
+            QPushButton:pressed {
+                background-color: #005A9E;
+            }
+        """)
         buttons_layout.addWidget(refresh_button)
         
         # 检查更新按钮
         check_update_button = QPushButton("检查更新")
         check_update_button.clicked.connect(self.check_updates_manually)
+        check_update_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078D7;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1C86E0;
+            }
+            QPushButton:pressed {
+                background-color: #005A9E;
+            }
+        """)
         buttons_layout.addWidget(check_update_button)
         
         # 将按钮组添加到标题栏
         header_layout.addLayout(buttons_layout)
         
-        main_layout.addLayout(header_layout)
-        
+        # 将整个头部布局添加到主布局
+        parent_layout.addLayout(header_layout)
+
+    def create_tabs(self, parent_layout):
+        """创建选项卡"""
         # 选项卡
         tab_widget = QTabWidget()
         tab_widget.setStyleSheet("QTabBar::tab { padding: 10px 20px; }")
         
-        # 价格监控选项卡 - 直接在标签页中显示内容，不使用子GroupBox
+        # 价格监控选项卡
         price_tab = QWidget()
         price_layout = QVBoxLayout(price_tab)
         price_layout.setContentsMargins(20, 20, 20, 20)
         
         # 价格监控网格布局 - 直接添加到价格标签页
         price_grid = QGridLayout()
-        price_grid.setColumnStretch(3, 1)  # 让价值列有更多空间
+        price_grid.setSpacing(10)  # 设置网格间距
         
-        # 神圣石输入 - 恢复标签
+        # 移除表头，直接从第1行开始
+        
+        # 神圣石行 - 第1行
         divine_label = QLabel("神圣石:")
         divine_label.setStyleSheet(f"color: {self.currency_colors['divine']}; font-weight: bold;")
         price_grid.addWidget(divine_label, 0, 0)
-
-        # 神圣石实时价格 - 初始设置为灰色的"加载中..."
+        
+        # 神圣石实时价格
         self.divine_price_label = QLabel("加载中...")
-        self.divine_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        self.divine_price_label.setStyleSheet(f"color: #888888;")
         price_grid.addWidget(self.divine_price_label, 0, 1)
-
+        
         # 神圣石输入框
         self.divine_amount = QLineEdit("100")
         self.divine_amount.textChanged.connect(self.on_divine_amount_changed)
         self.divine_amount.setFocusPolicy(Qt.ClickFocus)
+        self.divine_amount.setFixedWidth(80)  # 固定宽度
         price_grid.addWidget(self.divine_amount, 0, 2)
-
+        
+        # 神圣石价值
         self.divine_value = QLabel(f"￥{100 * self.prices['divine']:.2f}")
         self.divine_value.setStyleSheet("color: #00FF00; font-weight: bold;")
         price_grid.addWidget(self.divine_value, 0, 3)
-
-        # 神圣石兑换比例
-        self.divine_to_exalted = QLabel()
-        self.divine_to_chaos = QLabel()
-        self.divine_to_exalted.setText(f"<span style='color:{self.currency_colors['divine']}'>100D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
-        self.divine_to_chaos.setText(f"<span style='color:{self.currency_colors['divine']}'>100D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
-        price_grid.addWidget(self.divine_to_exalted, 0, 4)
-        price_grid.addWidget(self.divine_to_chaos, 0, 5)
-
-        # 崇高石输入 - 恢复标签
+        
+        # 神圣石兑换比例 - 放在同一单元格中
+        divine_exchange = QHBoxLayout()
+        self.divine_to_exalted = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
+        self.divine_to_chaos = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
+        divine_exchange.addWidget(self.divine_to_exalted)
+        divine_exchange.addWidget(self.divine_to_chaos)
+        divine_exchange_widget = QWidget()
+        divine_exchange_widget.setLayout(divine_exchange)
+        price_grid.addWidget(divine_exchange_widget, 0, 4, 1, 2)
+        
+        # 崇高石行 - 第2行
         exalted_label = QLabel("崇高石:")
         exalted_label.setStyleSheet(f"color: {self.currency_colors['exalted']}; font-weight: bold;")
         price_grid.addWidget(exalted_label, 1, 0)
-
-        # 崇高石实时价格 - 初始设置为灰色
+        
+        # 崇高石实时价格
         self.exalted_price_label = QLabel("加载中...")
-        self.exalted_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        self.exalted_price_label.setStyleSheet(f"color: #888888;")
         price_grid.addWidget(self.exalted_price_label, 1, 1)
-
+        
         # 崇高石输入框
         self.exalted_amount = QLineEdit("100")
         self.exalted_amount.textChanged.connect(self.on_exalted_amount_changed)
         self.exalted_amount.setFocusPolicy(Qt.ClickFocus)
+        self.exalted_amount.setFixedWidth(80)  # 固定宽度
         price_grid.addWidget(self.exalted_amount, 1, 2)
-
+        
+        # 崇高石价值
         self.exalted_value = QLabel(f"￥{100 * self.prices['exalted']:.2f}")
         self.exalted_value.setStyleSheet("color: #00FF00; font-weight: bold;")
         price_grid.addWidget(self.exalted_value, 1, 3)
-
-        # 崇高石兑换比例
-        self.exalted_to_divine = QLabel()
-        self.exalted_to_chaos = QLabel()
-        self.exalted_to_divine.setText(f"<span style='color:{self.currency_colors['exalted']}'>100E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
-        self.exalted_to_chaos.setText(f"<span style='color:{self.currency_colors['exalted']}'>100E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
-        price_grid.addWidget(self.exalted_to_divine, 1, 4)
-        price_grid.addWidget(self.exalted_to_chaos, 1, 5)
-
-        # 混沌石输入 - 恢复标签
+        
+        # 崇高石兑换比例 - 放在同一单元格中
+        exalted_exchange = QHBoxLayout()
+        self.exalted_to_divine = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
+        self.exalted_to_chaos = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>0C</span>")
+        exalted_exchange.addWidget(self.exalted_to_divine)
+        exalted_exchange.addWidget(self.exalted_to_chaos)
+        exalted_exchange_widget = QWidget()
+        exalted_exchange_widget.setLayout(exalted_exchange)
+        price_grid.addWidget(exalted_exchange_widget, 1, 4, 1, 2)
+        
+        # 混沌石行 - 第3行
         chaos_label = QLabel("混沌石:")
         chaos_label.setStyleSheet(f"color: {self.currency_colors['chaos']}; font-weight: bold;")
         price_grid.addWidget(chaos_label, 2, 0)
-
-        # 混沌石实时价格 - 初始设置为灰色
+        
+        # 混沌石实时价格
         self.chaos_price_label = QLabel("加载中...")
-        self.chaos_price_label.setStyleSheet(f"color: #888888;")  # 初始设置为灰色
+        self.chaos_price_label.setStyleSheet(f"color: #888888;")
         price_grid.addWidget(self.chaos_price_label, 2, 1)
-
+        
         # 混沌石输入框
         self.chaos_amount = QLineEdit("100")
         self.chaos_amount.textChanged.connect(self.on_chaos_amount_changed)
         self.chaos_amount.setFocusPolicy(Qt.ClickFocus)
+        self.chaos_amount.setFixedWidth(80)  # 固定宽度
         price_grid.addWidget(self.chaos_amount, 2, 2)
-
+        
+        # 混沌石价值
         self.chaos_value = QLabel(f"￥{100 * self.prices['chaos']:.2f}")
         self.chaos_value.setStyleSheet("color: #00FF00; font-weight: bold;")
         price_grid.addWidget(self.chaos_value, 2, 3)
         
-        # 混沌石兑换比例 - 恢复这部分代码
-        self.chaos_to_divine = QLabel()
-        self.chaos_to_exalted = QLabel()
-        self.chaos_to_divine.setText(f"<span style='color:{self.currency_colors['chaos']}'>100C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
-        self.chaos_to_exalted.setText(f"<span style='color:{self.currency_colors['chaos']}'>100C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
-        price_grid.addWidget(self.chaos_to_divine, 2, 4)
-        price_grid.addWidget(self.chaos_to_exalted, 2, 5)
+        # 混沌石兑换比例 - 放在同一单元格中
+        chaos_exchange = QHBoxLayout()
+        self.chaos_to_divine = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>0D</span>")
+        self.chaos_to_exalted = QLabel(f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>0E</span>")
+        chaos_exchange.addWidget(self.chaos_to_divine)
+        chaos_exchange.addWidget(self.chaos_to_exalted)
+        chaos_exchange_widget = QWidget()
+        chaos_exchange_widget.setLayout(chaos_exchange)
+        price_grid.addWidget(chaos_exchange_widget, 2, 4, 1, 2)
+        
+        # 设置列伸缩因子
+        price_grid.setColumnStretch(0, 1)  # 货币名称列
+        price_grid.setColumnStretch(1, 2)  # 实时价格列
+        price_grid.setColumnStretch(2, 1)  # 数量列
+        price_grid.setColumnStretch(3, 2)  # 价值列
+        price_grid.setColumnStretch(4, 3)  # 兑换比例列
+        price_grid.setColumnStretch(5, 1)  # 额外空间列
         
         # 将网格布局添加到价格标签页
         price_layout.addLayout(price_grid)
@@ -463,20 +561,17 @@ class MainWindow(QMainWindow):
         title_style = "font-size: 24px; margin-bottom: 10px; font-weight: bold;"
         content_style = "font-size: 18px; margin-bottom: 5px;"
         
-        # 下载部分 - 标题和链接在同一行
-        download_layout = QHBoxLayout()
-        download_title = QLabel("下载最新版本：")
+        # 下载部分 - 标题和链接分行显示
+        # 移除水平布局，直接添加到主布局
+        download_title = QLabel("最新版本：")
         download_title.setStyleSheet(title_style)
-        download_layout.addWidget(download_title)
+        tools_layout.addWidget(download_title)
         
         # 增加链接字体大小
         download_link = QLabel("<a href='https://cyurl.cn/poe2ada' style='color: #0078d7;'>https://cyurl.cn/poe2ada</a>")
         download_link.setOpenExternalLinks(True)
         download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
-        download_layout.addWidget(download_link)
-        download_layout.addStretch()  # 添加弹性空间，使链接靠左
-        
-        tools_layout.addLayout(download_layout)
+        tools_layout.addWidget(download_link)
         
         # 添加一些空间，但减少高度
         spacer = QLabel("")
@@ -506,52 +601,49 @@ class MainWindow(QMainWindow):
         # 不需要太多的弹性空间
         tools_layout.addStretch(1)
         
+        # 添加易刷查价选项卡
+        easy_refresh_tab = QWidget()
+        easy_refresh_layout = QVBoxLayout(easy_refresh_tab)
+        easy_refresh_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
+        easy_refresh_layout.setSpacing(5)  # 减小间距
+        
+        # 最新版本部分
+        er_download_title = QLabel("易刷最新版本：")
+        er_download_title.setStyleSheet(title_style)
+        easy_refresh_layout.addWidget(er_download_title)
+        
+        # 增加链接字体大小
+        er_download_link = QLabel("<a href='https://efarm-gjf-release3.710421059.xyz/' style='color: #0078d7;'>https://efarm-gjf-release3.710421059.xyz/</a>")
+        er_download_link.setOpenExternalLinks(True)
+        er_download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
+        easy_refresh_layout.addWidget(er_download_link)
+        
+        # 添加一些空间，但减少高度
+        er_spacer = QLabel("")
+        er_spacer.setStyleSheet("margin-top: 10px;")
+        easy_refresh_layout.addWidget(er_spacer)
+
+        # poe2网页市集繁体化部分
+        er_download_title = QLabel("poe2网页市集繁体化：")
+        er_download_title.setStyleSheet(title_style)
+        easy_refresh_layout.addWidget(er_download_title)
+        
+        # 增加链接字体大小
+        er_download_link = QLabel("<a href='https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93' style='color: #0078d7;'>https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93</a>")
+        er_download_link.setOpenExternalLinks(True)
+        er_download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
+        easy_refresh_layout.addWidget(er_download_link)
+        
+        # 不需要太多的弹性空间
+        easy_refresh_layout.addStretch(1)
+        
         # 添加主选项卡
         tab_widget.clear()  # 清除所有现有标签
         tab_widget.addTab(price_tab, "价格监控")
         tab_widget.addTab(tools_tab, "A大补丁")
+        tab_widget.addTab(easy_refresh_tab, "易刷查价")
         
-        main_layout.addWidget(tab_widget)
-        
-        self.setCentralWidget(main_widget)
-        
-        # 添加事件过滤器，处理点击其他区域时清除焦点
-        main_widget.installEventFilter(self)
-        
-        # 初始计算
-        self.calculate_value()
-        
-        # 在GUI初始化末尾处理图标
-        # 使用绝对路径获取图标
-        if getattr(sys, 'frozen', False):
-            # 如果是打包后的程序
-            base_path = sys._MEIPASS
-        else:
-            # 如果是源代码运行
-            base_path = os.path.dirname(os.path.abspath(__file__))
-        
-        icon_path = os.path.join(base_path, 'app.ico')
-        
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
-            # 设置应用程序图标，影响任务栏
-            if hasattr(app, 'setWindowIcon'):
-                app.setWindowIcon(QIcon(icon_path))
-            print(f"成功加载图标: {icon_path}")
-        else:
-            print(f"图标文件不存在: {icon_path}")
-            # 尝试在当前目录直接查找
-            if os.path.exists('app.ico'):
-                self.setWindowIcon(QIcon('app.ico'))
-                if hasattr(app, 'setWindowIcon'):
-                    app.setWindowIcon(QIcon('app.ico'))
-                print("使用当前目录下的app.ico")
-        
-        # 在init_ui方法中，添加调试输出
-        print("初始化UI完成，设置输入框信号连接")
-        print(f"神圣石输入框: {self.divine_amount}")
-        print(f"崇高石输入框: {self.exalted_amount}")
-        print(f"混沌石输入框: {self.chaos_amount}")
+        parent_layout.addWidget(tab_widget)
     
     def update_price(self, currency, price):
         """更新货币价格并重新计算所有比例"""
@@ -569,18 +661,12 @@ class MainWindow(QMainWindow):
         
         # 重要：直接更新兑换比例，不依赖于calculate_value
         self.update_exchange_rates()
-        
-        # 添加日志以便排查问题
-        print(f"更新{self.currency_names[currency]}价格: {price}")
-        print(f"当前价格数据: {self.prices}")
-        print(f"兑换比例已更新")
     
     def refresh_prices(self):
         """刷新价格数据"""
         try:
             # 检查是否已经有一个刷新线程在运行
             if hasattr(self, 'price_thread') and self.price_thread.isRunning():
-                print("已有价格更新线程在运行，请等待完成")
                 return
             
             # 更新UI显示为"加载中..."
@@ -599,16 +685,12 @@ class MainWindow(QMainWindow):
             
             # 启动线程
             self.price_thread.start()
-            
-            print("价格刷新线程已启动")
         except Exception as e:
-            print(f"刷新价格时出错: {e}")
             # 恢复原来的价格显示
             self.update_all_price_displays()
 
     def on_price_refresh_finished(self):
         """价格刷新完成后的处理"""
-        print("价格刷新完成")
         # 恢复价格标签的颜色
         for currency in self.currency_names:
             price_label = getattr(self, f"{currency}_price_label", None)
@@ -650,31 +732,20 @@ class MainWindow(QMainWindow):
             
             # 重要：直接更新兑换比例，不依赖于其他方法
             self.update_exchange_rates()
-            
-            # 添加调试输出
-            print(f"计算价值被调用，当前价格: {self.prices}")
-            print(f"计算价值: 神圣石={divine_amount}, 崇高石={exalted_amount}, 混沌石={chaos_amount}")
-            print(f"价值结果: 神圣石=￥{divine_value:.2f}, 崇高石=￥{exalted_value:.2f}, 混沌石=￥{chaos_value:.2f}")
-            print(f"兑换比例已更新")
         except (ValueError, AttributeError) as e:
-            print(f"计算价值时出错: {e}")
             # 即使出错，也尝试更新兑换比例
             try:
                 self.update_exchange_rates()
             except Exception as e2:
-                print(f"尝试更新兑换比例时出错: {e2}")
+                pass
     
     def update_exchange_rates(self):
         """更新所有兑换比例"""
         # 防止除以零
         if self.prices['divine'] <= 0 or self.prices['exalted'] <= 0 or self.prices['chaos'] <= 0:
-            print("无法更新兑换比例: 价格中有零值")
             return
         
         try:
-            print("开始更新兑换比例...")
-            print(f"当前价格: 神圣石={self.prices['divine']}, 崇高石={self.prices['exalted']}, 混沌石={self.prices['chaos']}")
-            
             # 获取用户输入的货币数量
             divine_amount = float(self.divine_amount.text() or "0")
             exalted_amount = float(self.exalted_amount.text() or "0")
@@ -686,43 +757,33 @@ class MainWindow(QMainWindow):
             divine_to_chaos_ratio = self.prices["divine"] / self.prices["chaos"] if self.prices["chaos"] > 0 else 0
             
             # 崇高石兑换比例
-            exalted_to_divine_ratio = self.prices["exalted"] / self.prices["divine"] if self.prices["divine"] > 0 else 0
+            exalted_to_divine_ratio = 1 / divine_to_exalted_ratio if divine_to_exalted_ratio > 0 else 0
             exalted_to_chaos_ratio = self.prices["exalted"] / self.prices["chaos"] if self.prices["chaos"] > 0 else 0
             
             # 混沌石兑换比例
-            chaos_to_divine_ratio = self.prices["chaos"] / self.prices["divine"] if self.prices["divine"] > 0 else 0
-            chaos_to_exalted_ratio = self.prices["chaos"] / self.prices["exalted"] if self.prices["exalted"] > 0 else 0
+            chaos_to_divine_ratio = 1 / divine_to_chaos_ratio if divine_to_chaos_ratio > 0 else 0
+            chaos_to_exalted_ratio = 1 / exalted_to_chaos_ratio if exalted_to_chaos_ratio > 0 else 0
             
-            # 更新兑换比例标签 - 使用HTML格式和颜色
-            divine_to_exalted_text = f"<span style='color:{self.currency_colors['divine']}'>{divine_amount}D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(divine_amount * divine_to_exalted_ratio)}E</span>"
-            divine_to_chaos_text = f"<span style='color:{self.currency_colors['divine']}'>{divine_amount}D</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(divine_amount * divine_to_chaos_ratio)}C</span>"
+            # 更新兑换比例标签 - 使用HTML格式和颜色，简化显示
+            divine_to_exalted_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(divine_amount * divine_to_exalted_ratio)}E</span>"
+            divine_to_chaos_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(divine_amount * divine_to_chaos_ratio)}C</span>"
             
             self.divine_to_exalted.setText(divine_to_exalted_text)
             self.divine_to_chaos.setText(divine_to_chaos_text)
             
-            exalted_to_divine_text = f"<span style='color:{self.currency_colors['exalted']}'>{exalted_amount}E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(exalted_amount * exalted_to_divine_ratio)}D</span>"
-            exalted_to_chaos_text = f"<span style='color:{self.currency_colors['exalted']}'>{exalted_amount}E</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(exalted_amount * exalted_to_chaos_ratio)}C</span>"
+            exalted_to_divine_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(exalted_amount * exalted_to_divine_ratio)}D</span>"
+            exalted_to_chaos_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['chaos']}'>{int(exalted_amount * exalted_to_chaos_ratio)}C</span>"
             
             self.exalted_to_divine.setText(exalted_to_divine_text)
             self.exalted_to_chaos.setText(exalted_to_chaos_text)
             
-            chaos_to_divine_text = f"<span style='color:{self.currency_colors['chaos']}'>{chaos_amount}C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(chaos_amount * chaos_to_divine_ratio)}D</span>"
-            chaos_to_exalted_text = f"<span style='color:{self.currency_colors['chaos']}'>{chaos_amount}C</span><span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(chaos_amount * chaos_to_exalted_ratio)}E</span>"
+            chaos_to_divine_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['divine']}'>{int(chaos_amount * chaos_to_divine_ratio)}D</span>"
+            chaos_to_exalted_text = f"<span style='color:white'>≈</span><span style='color:{self.currency_colors['exalted']}'>{int(chaos_amount * chaos_to_exalted_ratio)}E</span>"
             
             self.chaos_to_divine.setText(chaos_to_divine_text)
             self.chaos_to_exalted.setText(chaos_to_exalted_text)
-            
-            # 强制更新UI
-            QApplication.processEvents()
-            
-            print("兑换比例更新完成:")
-            print(f"神圣石兑换: {divine_to_exalted_text} | {divine_to_chaos_text}")
-            print(f"崇高石兑换: {exalted_to_divine_text} | {exalted_to_chaos_text}")
-            print(f"混沌石兑换: {chaos_to_divine_text} | {chaos_to_exalted_text}")
         except Exception as e:
             print(f"更新兑换比例时出错: {e}")
-            import traceback
-            traceback.print_exc()
 
     def eventFilter(self, obj, event):
         # 当点击主窗口其他区域时，清除所有输入框的焦点
@@ -771,7 +832,7 @@ class MainWindow(QMainWindow):
         
         except Exception as e:
             # 自动检查时出错，不显示提示，只记录日志
-            print(f"自动检查更新时出错: {e}")
+            pass
 
     def compare_versions(self, version1, version2):
         """比较两个版本号，返回 1 如果 version1 > version2，返回 -1 如果 version1 < version2，返回 0 如果相等"""
@@ -823,7 +884,7 @@ class MainWindow(QMainWindow):
                     # 退出当前程序
                     sys.exit(0)
                 except Exception as e:
-                    print(f"重命名失败: {e}")
+                    pass
             
             # 创建进度对话框
             self.progress_dialog = QProgressDialog("正在下载更新...", "取消", 0, 100, self)
@@ -841,9 +902,6 @@ class MainWindow(QMainWindow):
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            
-            # 添加错误日志
-            print(f"正在从 {download_url} 下载更新")
             
             # 使用stream=True来启用流式下载
             response = requests.get(download_url, headers=headers, stream=True, timeout=30)
@@ -948,8 +1006,6 @@ exit
             if hasattr(self, 'progress_dialog') and self.progress_dialog:
                 self.progress_dialog.close()
             QMessageBox.critical(self, "更新失败", f"更新过程中出错: {e}")
-            print(f"更新错误详情: {str(e)}")
-            self.is_updating = False
 
     def check_updates_manually(self):
         # 如果正在更新，则跳过
@@ -1058,7 +1114,6 @@ exit
             
             return True
         except Exception as e:
-            print(f"创建桌面快捷方式失败: {e}")
             return False
 
     def cancel_download(self):
@@ -1080,10 +1135,8 @@ exit
             
             # 直接更新兑换比例
             self.update_exchange_rates()
-            
-            print(f"神圣石数量变更为{amount}，价值为￥{value:.2f}")
         except ValueError as e:
-            print(f"处理神圣石数量变化时出错: {e}")
+            pass
 
     def on_exalted_amount_changed(self, text):
         """处理崇高石数量变化"""
@@ -1100,10 +1153,8 @@ exit
             
             # 直接更新兑换比例
             self.update_exchange_rates()
-            
-            print(f"崇高石数量变更为{amount}，价值为￥{value:.2f}")
         except ValueError as e:
-            print(f"处理崇高石数量变化时出错: {e}")
+            pass
 
     def on_chaos_amount_changed(self, text):
         """处理混沌石数量变化"""
@@ -1120,10 +1171,21 @@ exit
             
             # 直接更新兑换比例
             self.update_exchange_rates()
-            
-            print(f"混沌石数量变更为{amount}，价值为￥{value:.2f}")
         except ValueError as e:
-            print(f"处理混沌石数量变化时出错: {e}")
+            pass
+
+    def closeEvent(self, event):
+        # 停止所有线程
+        if hasattr(self, 'price_thread') and self.price_thread.isRunning():
+            self.price_thread.terminate()
+            self.price_thread.wait()
+        
+        # 停止所有定时器
+        if hasattr(self, 'update_timer'):
+            self.update_timer.stop()
+        
+        # 调用父类方法
+        super().closeEvent(event)
 
 if __name__ == "__main__":
     # 设置环境变量，确保PyInstaller能找到临时目录

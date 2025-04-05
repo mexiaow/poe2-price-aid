@@ -13,7 +13,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QIcon
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 import tempfile
 import urllib.request
@@ -110,14 +110,18 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.9"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.9"
+        self.current_version = "1.0.10"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.10"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
         
         # 添加一个属性来跟踪取消状态
         self.download_canceled = False
+        
+        # 添加刷新倒计时变量
+        self.countdown_seconds = 300  # 5分钟倒计时
+        self.start_time = datetime.now()  # 记录开始时间
         
         # 清理缓存，确保字体大小一致
         self.clear_app_cache()
@@ -143,12 +147,16 @@ class MainWindow(QMainWindow):
         self.price_thread.finished.connect(self.on_price_refresh_finished)  # 添加完成信号处理
         self.price_thread.start()
         
-        # 注释掉自动更新检查
-        # self.update_timer = QTimer(self)
-        # self.update_timer.timeout.connect(self.check_for_updates)
-        # self.update_timer.start(3600000)  # 每小时检查一次更新 (3600000毫秒)
-        # 
-        # # 启动时检查更新
+        # 设置价格自动刷新定时器 - 每5分钟刷新一次
+        self.price_refresh_timer = QTimer(self)
+        self.price_refresh_timer.timeout.connect(self.refresh_prices)
+        self.price_refresh_timer.start(300000)  # 5分钟 = 300000毫秒
+        
+        # 设置倒计时更新定时器 - 每秒更新一次
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.timeout.connect(self.update_countdown)
+        self.countdown_timer.start(1000)  # 每秒更新一次
+        
         # 设置自动更新检查
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.check_for_updates)
@@ -569,10 +577,24 @@ class MainWindow(QMainWindow):
         # 添加价格网格到价格标签页
         price_layout.addLayout(price_grid)
         
+        # 底部布局 - 说明文本和倒计时
+        bottom_layout = QHBoxLayout()
+        
         # 添加说明文本
         price_note = QLabel("说明: 价格数据来自平台，每5分钟自动更新一次。")
         price_note.setStyleSheet("color: #888888; margin-top: 10px; font-size: 16px;")  # 增加字体大小
-        price_layout.addWidget(price_note)
+        bottom_layout.addWidget(price_note)
+        
+        # 添加弹性空间，将倒计时推到右侧
+        bottom_layout.addStretch(1)
+        
+        # 添加倒计时标签
+        self.countdown_label = QLabel("下次刷新: 05:00")
+        self.countdown_label.setStyleSheet("color: #888888; margin-top: 10px; font-size: 14px;")
+        bottom_layout.addWidget(self.countdown_label)
+        
+        # 将底部布局添加到价格标签页
+        price_layout.addLayout(bottom_layout)
         
         # 添加弹性空间
         price_layout.addStretch(1)
@@ -741,6 +763,10 @@ class MainWindow(QMainWindow):
             
             # 启动线程
             self.price_thread.start()
+            
+            # 重置倒计时
+            self.start_time = datetime.now()
+            self.countdown_seconds = 300  # 5分钟
         except Exception as e:
             # 恢复原来的价格显示
             self.update_all_price_displays()
@@ -1241,6 +1267,14 @@ exit
         if hasattr(self, 'update_timer'):
             self.update_timer.stop()
         
+        # 停止价格刷新定时器
+        if hasattr(self, 'price_refresh_timer'):
+            self.price_refresh_timer.stop()
+        
+        # 停止倒计时定时器
+        if hasattr(self, 'countdown_timer'):
+            self.countdown_timer.stop()
+        
         # 调用父类方法
         super().closeEvent(event)
 
@@ -1287,6 +1321,27 @@ exit
         except Exception as e:
             # 出错时不影响程序运行，只是记录错误
             print(f"清理缓存时出错: {e}")
+
+    def update_countdown(self):
+        """更新倒计时显示"""
+        try:
+            # 计算剩余时间
+            elapsed_seconds = (datetime.now() - self.start_time).total_seconds()
+            remaining_seconds = max(0, self.countdown_seconds - int(elapsed_seconds))
+            
+            # 更新倒计时显示
+            minutes, seconds = divmod(remaining_seconds, 60)
+            self.countdown_label.setText(f"下次刷新: {minutes:02d}:{seconds:02d}")
+            
+            # 如果倒计时结束，且不是由于手动刷新触发的，则启动刷新
+            if remaining_seconds == 0 and elapsed_seconds >= self.countdown_seconds:
+                # 避免多次触发刷新，将开始时间暂时设置为未来
+                self.start_time = datetime.now() + timedelta(seconds=10)
+                # 等待倒计时定时器下一次触发前刷新价格
+                QTimer.singleShot(100, self.refresh_prices)
+        except Exception as e:
+            # 出错时不影响程序运行
+            print(f"更新倒计时出错: {e}")
 
 if __name__ == "__main__":
     # 在创建QApplication之前设置高DPI属性

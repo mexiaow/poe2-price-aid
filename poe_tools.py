@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.8"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.8"
+        self.current_version = "1.0.9"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.9"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -378,8 +378,8 @@ class MainWindow(QMainWindow):
         nav_buttons = [
             ("编年史", "https://poe2db.tw/cn/"),
             ("官网", "https://pathofexile2.com/home"),
-            ("市集", "https://www.pathofexile.com/trade2/search/poe2/Standard"),
-            ("忍者", "https://poe2.ninja/builds/"),
+            ("市集", "https://www.pathofexile.com/trade2/search/poe2/Dawn%20of%20the%20Hunt"),
+            ("忍者", "https://poe2.ninja/builds/dawn"),
             ("踩蘑菇", "https://www.caimogu.cc/circle/449.html")
         ]
         

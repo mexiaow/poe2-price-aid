@@ -135,7 +135,7 @@ def update_json_file(version):
         return False
 
 def upload_to_webdav(version):
-    """将程序和update.json上传到WebDAV服务器"""
+    """将程序和update.json上传到WebDAV服务器，并只保留最新的5个版本"""
     print("📤 正在上传文件到WebDAV服务器...")
     
     try:
@@ -201,9 +201,92 @@ def upload_to_webdav(version):
         print(f"  - update.json: {WEBDAV_CONFIG['url']}/update.json")
         print(f"  - 下载链接: {WEBDAV_CONFIG['download_url_base']}POE2PriceAid_v{version}.exe")
         
+        # 清理旧版本，只保留最新的5个版本
+        clean_old_versions()
+        
         return True
     except Exception as e:
         print(f"❌ 上传到WebDAV失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def clean_old_versions():
+    """清理WebDAV服务器上的旧版本，只保留最新的5个版本"""
+    print("🧹 正在检查并清理旧版本...")
+    try:
+        # 使用PROPFIND方法获取WebDAV服务器上的文件列表
+        headers = {
+            'Depth': '1',  # 只获取当前目录的文件，不包括子目录
+            'Content-Type': 'application/xml'
+        }
+        
+        response = requests.request(
+            'PROPFIND',
+            WEBDAV_CONFIG['url'],
+            auth=(WEBDAV_CONFIG['username'], WEBDAV_CONFIG['password']),
+            headers=headers
+        )
+        
+        if response.status_code != 207:  # 207是WebDAV的Multi-Status响应
+            print(f"❌ 获取文件列表失败: HTTP {response.status_code}")
+            return False
+        
+        # 解析XML响应，提取文件名
+        from xml.etree import ElementTree as ET
+        root = ET.fromstring(response.content)
+        
+        # 查找所有POE2PriceAid_v*.exe文件
+        version_files = []
+        for response_elem in root.findall('.//{DAV:}response'):
+            href = response_elem.find('.//{DAV:}href').text
+            filename = os.path.basename(href)
+            
+            # 匹配POE2PriceAid_v*.exe文件
+            match = re.match(r'POE2PriceAid_v(\d+\.\d+\.\d+)\.exe', filename)
+            if match:
+                version = match.group(1)
+                version_files.append((version, filename))
+        
+        # 按版本号排序（从新到旧）
+        version_files.sort(key=lambda x: [int(n) for n in x[0].split('.')], reverse=True)
+        
+        # 如果版本数量超过5个，删除旧版本
+        if len(version_files) > 5:
+            print(f"发现 {len(version_files)} 个版本，将只保留最新的5个版本")
+            
+            # 保留最新的5个版本
+            keep_versions = version_files[:5]
+            delete_versions = version_files[5:]
+            
+            # 打印将保留的版本
+            print("将保留以下版本:")
+            for version, filename in keep_versions:
+                print(f"  - {filename}")
+            
+            # 删除旧版本
+            print("正在删除以下旧版本:")
+            for version, filename in delete_versions:
+                print(f"  - {filename}")
+                
+                # 发送DELETE请求删除文件
+                delete_response = requests.delete(
+                    f"{WEBDAV_CONFIG['url']}/{filename}",
+                    auth=(WEBDAV_CONFIG['username'], WEBDAV_CONFIG['password'])
+                )
+                
+                if delete_response.status_code not in (200, 204):
+                    print(f"    ❌ 删除失败: HTTP {delete_response.status_code}")
+                else:
+                    print(f"    ✅ 删除成功")
+            
+            print("✅ 旧版本清理完成")
+        else:
+            print(f"当前共有 {len(version_files)} 个版本，不需要清理")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 清理旧版本失败: {e}")
         import traceback
         traceback.print_exc()
         return False

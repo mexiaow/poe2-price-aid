@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.6"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.6"
+        self.current_version = "1.0.7"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.7"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -133,22 +133,6 @@ class MainWindow(QMainWindow):
         self.prices = {"divine": 0.00, "exalted": 0.00, "chaos": 0.00}
         self.currency_names = {"divine": "神圣石", "exalted": "崇高石", "chaos": "混沌石"}
         self.currency_colors = {"divine": "#FFD700", "exalted": "#00BFFF", "chaos": "#FF6347"}
-        
-        # 增强DPI感知设置
-        if hasattr(Qt, 'AA_EnableHighDpiScaling'):
-            QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-        if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
-            QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-        
-        # 强制设置应用程序字体大小
-        app = QApplication.instance()
-        font = app.font()
-        font.setPointSize(16)  # 将14px调整为16px，更适合大多数显示器
-        app.setFont(font)
-        
-        # 禁用系统DPI缩放，使用自定义缩放
-        os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
-        os.environ["QT_SCALE_FACTOR"] = "1"
         
         # 创建UI
         self.init_ui()
@@ -593,111 +577,113 @@ class MainWindow(QMainWindow):
         # 添加弹性空间
         price_layout.addStretch(1)
         
-        # A大补丁选项卡 - 使用更紧凑的布局
+        # A大补丁选项卡
         tools_tab = QWidget()
         tools_layout = QVBoxLayout(tools_tab)
-        tools_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
-        tools_layout.setSpacing(5)  # 减小间距
+        tools_layout.setContentsMargins(20, 20, 20, 20)
         
         # 标题和内容样式
-        title_style = "font-size: 24px; margin-bottom: 10px; font-weight: bold;"
-        content_style = "font-size: 18px; margin-bottom: 5px;"
-        # 为易刷、一乐过滤和繁体化标题创建小一号的标题样式
-        subtitle_style = "font-size: 20px; margin-bottom: 10px; font-weight: bold;"
+        title_style = "font-size: 22px; margin-bottom: 10px; font-weight: bold;"
+        content_style = "font-size: 16px; margin-bottom: 5px;"
+        subtitle_style = "font-size: 18px; margin-bottom: 10px; font-weight: bold;"
+        link_style = "font-size: 20px; margin-bottom: 5px;"
         
-        # 下载部分 - 标题和链接分行显示
-        # 移除水平布局，直接添加到主布局
-        download_title = QLabel("最新版本：")
-        download_title.setStyleSheet(title_style)
-        tools_layout.addWidget(download_title)
-        
-        # 增加链接字体大小
-        download_link = QLabel("<a href='https://cloud.xiaow.org:8443/s/vmIj' style='color: #0078d7;'>https://cloud.xiaow.org:8443/s/vmIj</a>")
-        download_link.setOpenExternalLinks(True)
-        download_link.setStyleSheet("font-size: 24px; margin-bottom: 5px;")  # 增加字体大小到24px
-        tools_layout.addWidget(download_link)
-        
-        # 添加一些空间，但减少高度
+        # 最新版本 - 标题和链接在同一行
+        version_row = QHBoxLayout()
+        version_title = QLabel("最新版本：")
+        version_title.setStyleSheet(link_style)
+        version_row.addWidget(version_title)
+
+        version_link = QLabel("<a href='https://cyurl.cn/adabd' style='color: #0078d7;'>https://cyurl.cn/adabd</a>")
+        version_link.setOpenExternalLinks(True)
+        version_link.setStyleSheet(link_style)
+        version_row.addWidget(version_link)
+        version_row.addStretch(1)  # 添加弹性空间，使内容左对齐
+
+        # 将水平布局添加到主布局
+        tools_layout.addLayout(version_row)
+
+        # 添加换行
         spacer = QLabel("")
-        spacer.setStyleSheet("margin-top: 10px;")
+        spacer.setStyleSheet("margin-top: 15px;")
         tools_layout.addWidget(spacer)
-        
-        # 使用方法部分
-        usage_title = QLabel("使用方法：")
-        usage_title.setStyleSheet(title_style)
-        tools_layout.addWidget(usage_title)
-        
-        # 使用垂直布局来放置步骤
-        steps_layout = QVBoxLayout()
-        steps_layout.setSpacing(2)  # 减小步骤之间的间距
-        
-        # 使用单独的标签显示每个步骤
+
+        # 使用方法部分 - 直接添加步骤
         step1 = QLabel("1.打开VisualGGPK3")
         step2 = QLabel("2.选择POE2根目录Content.ggpk")
         step3 = QLabel("3.然后将你需要的补丁zip压缩包直接拖进VisualGGPK3窗口")
-        
-        # 为步骤设置更大的字体
-        steps_style = content_style.replace("18px", "22px")  # 将字体从18px增加到22px
-        
+
+        # 为步骤设置字体
+        steps_style = "font-size: 20px; margin-bottom: 5px;"
+
         for step in [step1, step2, step3]:
             step.setStyleSheet(steps_style)
-            steps_layout.addWidget(step)
-        
-        tools_layout.addLayout(steps_layout)
-        
-        # 不需要太多的弹性空间
+            tools_layout.addWidget(step)
+
+        # 添加弹性空间
         tools_layout.addStretch(1)
         
-        # 添加易刷查价选项卡
+        # 查价过滤汉化选项卡
         easy_refresh_tab = QWidget()
         easy_refresh_layout = QVBoxLayout(easy_refresh_tab)
-        easy_refresh_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
-        easy_refresh_layout.setSpacing(5)  # 减小间距
+        easy_refresh_layout.setContentsMargins(20, 20, 20, 20)
         
-        # 最新版本部分 - 使用小一号的标题样式
-        er_download_title = QLabel("易刷最新版本：")
-        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
-        easy_refresh_layout.addWidget(er_download_title)
-        
-        # 增加链接字体大小
-        er_download_link = QLabel("<a href='https://efarm-gjf-release3.710421059.xyz/' style='color: #0078d7;'>https://efarm-gjf-release3.710421059.xyz/</a>")
-        er_download_link.setOpenExternalLinks(True)
-        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 增加字体大小到24px
-        easy_refresh_layout.addWidget(er_download_link)
-        
-        # 添加一些空间，但减少高度
-        er_spacer = QLabel("")
-        er_spacer.setStyleSheet("margin-top: 10px;")
-        easy_refresh_layout.addWidget(er_spacer)
+        # 易刷查价 - 标题和链接在同一行
+        er_row = QHBoxLayout()
+        er_title = QLabel("易刷查价：")
+        er_title.setStyleSheet(link_style)
+        er_row.addWidget(er_title)
 
-        # 一乐过滤部分 - 使用小一号的标题样式
-        er_download_title = QLabel("一乐过滤：")
-        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
-        easy_refresh_layout.addWidget(er_download_title)
-        
-        # 增加链接字体大小，但比其他链接小一号
-        er_download_link = QLabel("<a href='https://cloud.xiaow.org:8443/s/wRSz' style='color: #0078d7;'>https://cloud.xiaow.org:8443/s/wRSz</a>")
-        er_download_link.setOpenExternalLinks(True)
-        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 字体调小到22px
-        easy_refresh_layout.addWidget(er_download_link)
-        
-        # 添加一些空间，但减少高度
-        er_spacer = QLabel("")
-        er_spacer.setStyleSheet("margin-top: 10px;")
-        easy_refresh_layout.addWidget(er_spacer)
+        er_link = QLabel("<a href='https://cyurl.cn/eshua' style='color: #0078d7;'>https://cyurl.cn/eshua</a>")
+        er_link.setOpenExternalLinks(True)
+        er_link.setStyleSheet(link_style)
+        er_row.addWidget(er_link)
+        er_row.addStretch(1)  # 添加弹性空间，使内容左对齐
 
-        # poe2网页市集繁体化部分 - 使用小一号的标题样式
-        er_download_title = QLabel("poe2网页市集繁体化：")
-        er_download_title.setStyleSheet(subtitle_style)  # 使用小一号标题样式
-        easy_refresh_layout.addWidget(er_download_title)
-        
-        # 增加链接字体大小
-        er_download_link = QLabel("<a href='https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93' style='color: #0078d7;'>https://greasyfork.org/zh-CN/scripts/520190-poe2-trade-%E7%B9%81%E4%BD%93</a>")
-        er_download_link.setOpenExternalLinks(True)
-        er_download_link.setStyleSheet("font-size: 22px; margin-bottom: 5px;")  # 增加字体大小到24px
-        easy_refresh_layout.addWidget(er_download_link)
-        
-        # 不需要太多的弹性空间
+        # 将水平布局添加到主布局
+        easy_refresh_layout.addLayout(er_row)
+
+        # 添加换行
+        er_spacer1 = QLabel("")
+        er_spacer1.setStyleSheet("margin-top: 15px;")
+        easy_refresh_layout.addWidget(er_spacer1)
+
+        # 一乐过滤 - 标题和链接在同一行
+        yile_row = QHBoxLayout()
+        yile_title = QLabel("一乐过滤：")
+        yile_title.setStyleSheet(link_style)
+        yile_row.addWidget(yile_title)
+
+        yile_link = QLabel("<a href='https://cyurl.cn/yilegl' style='color: #0078d7;'>https://cyurl.cn/yilegl</a>")
+        yile_link.setOpenExternalLinks(True)
+        yile_link.setStyleSheet(link_style)
+        yile_row.addWidget(yile_link)
+        yile_row.addStretch(1)  # 添加弹性空间，使内容左对齐
+
+        # 将水平布局添加到主布局
+        easy_refresh_layout.addLayout(yile_row)
+
+        # 添加换行
+        er_spacer2 = QLabel("")
+        er_spacer2.setStyleSheet("margin-top: 15px;")
+        easy_refresh_layout.addWidget(er_spacer2)
+
+        # poe2网页市集繁体 - 标题和链接在同一行
+        trade_row = QHBoxLayout()
+        trade_title = QLabel("poe2网页市集繁体：")
+        trade_title.setStyleSheet(link_style)
+        trade_row.addWidget(trade_title)
+
+        trade_link = QLabel("<a href='https://cyurl.cn/poe2trade' style='color: #0078d7;'>https://cyurl.cn/poe2trade</a>")
+        trade_link.setOpenExternalLinks(True)
+        trade_link.setStyleSheet(link_style)
+        trade_row.addWidget(trade_link)
+        trade_row.addStretch(1)  # 添加弹性空间，使内容左对齐
+
+        # 将水平布局添加到主布局
+        easy_refresh_layout.addLayout(trade_row)
+
+        # 添加弹性空间
         easy_refresh_layout.addStretch(1)
         
         # 添加BD监控选项卡
@@ -1298,24 +1284,27 @@ exit
             if app:
                 app.setFont(font)
             
-            # 强制应用DPI设置
-            if hasattr(QApplication, 'setAttribute'):
-                QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-                QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-            
         except Exception as e:
             # 出错时不影响程序运行，只是记录错误
             print(f"清理缓存时出错: {e}")
 
 if __name__ == "__main__":
+    # 在创建QApplication之前设置高DPI属性
+    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, False)  # 禁用高DPI缩放
+    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # 使用高DPI图像
+    
     # 在创建QApplication之前设置环境变量
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"  # 禁用自动缩放
-    os.environ["QT_FONT_DPI"] = "96"  # 设置固定DPI值，确保字体大小一致
+    os.environ["QT_SCALE_FACTOR"] = "1.0"  # 设置固定缩放因子
+    os.environ["QT_FONT_DPI"] = "96"  # 设置固定DPI值
     
     # 设置环境变量，确保PyInstaller能找到临时目录
     if getattr(sys, 'frozen', False):
         os.environ['PYI_APPLICATION_HOME_DIR'] = os.path.dirname(sys.executable)
     
+    # 创建QApplication实例
     app = QApplication(sys.argv)
     
     # 检测屏幕DPI并调整字体大小
@@ -1335,8 +1324,7 @@ if __name__ == "__main__":
         font_size = base_size
     
     # 强制设置应用程序字体
-    font = QFont("Microsoft YaHei")
-    font.setPixelSize(font_size)
+    font = QFont("Microsoft YaHei", font_size)
     app.setFont(font)
     
     # 同时设置环境变量

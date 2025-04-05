@@ -204,6 +204,9 @@ def upload_to_webdav(version):
         # 清理旧版本，只保留最新的5个版本
         clean_old_versions()
         
+        # 清理本地dist文件夹，只保留最新的5个版本
+        clean_local_dist_folder()
+        
         return True
     except Exception as e:
         print(f"❌ 上传到WebDAV失败: {e}")
@@ -287,6 +290,63 @@ def clean_old_versions():
         return True
     except Exception as e:
         print(f"❌ 清理旧版本失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def clean_local_dist_folder():
+    """清理本地dist文件夹中的旧版本，只保留最新的5个版本"""
+    print("🧹 正在检查并清理本地dist文件夹中的旧版本...")
+    try:
+        dist_folder = "dist"
+        if not os.path.exists(dist_folder) or not os.path.isdir(dist_folder):
+            print(f"❌ dist文件夹不存在")
+            return False
+        
+        # 获取dist文件夹中所有的POE2PriceAid_v*.exe文件
+        version_files = []
+        for filename in os.listdir(dist_folder):
+            # 匹配POE2PriceAid_v*.exe文件
+            match = re.match(r'POE2PriceAid_v(\d+\.\d+\.\d+)\.exe', filename)
+            if match:
+                version = match.group(1)
+                version_files.append((version, filename))
+        
+        # 按版本号排序（从新到旧）
+        version_files.sort(key=lambda x: [int(n) for n in x[0].split('.')], reverse=True)
+        
+        # 如果版本数量超过5个，删除旧版本
+        if len(version_files) > 5:
+            print(f"本地dist文件夹中发现 {len(version_files)} 个版本，将只保留最新的5个版本")
+            
+            # 保留最新的5个版本
+            keep_versions = version_files[:5]
+            delete_versions = version_files[5:]
+            
+            # 打印将保留的版本
+            print("将保留以下版本:")
+            for version, filename in keep_versions:
+                print(f"  - {filename}")
+            
+            # 删除旧版本
+            print("正在删除以下旧版本:")
+            for version, filename in delete_versions:
+                file_path = os.path.join(dist_folder, filename)
+                print(f"  - {filename}")
+                
+                try:
+                    os.remove(file_path)
+                    print(f"    ✅ 删除成功")
+                except Exception as e:
+                    print(f"    ❌ 删除失败: {e}")
+            
+            print("✅ 本地dist文件夹清理完成")
+        else:
+            print(f"本地dist文件夹中当前共有 {len(version_files)} 个版本，不需要清理")
+        
+        return True
+    except Exception as e:
+        print(f"❌ 清理本地dist文件夹失败: {e}")
         import traceback
         traceback.print_exc()
         return False

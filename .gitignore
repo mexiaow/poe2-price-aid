@@ -1,6 +1,14 @@
-# 忽略构建目录
-/build/
-/dist/
+# 忽略所有文件和目录
+*
+**/*/
+**/**
+
+# 只同步以下指定文件
+!update.json
+!version.txt
+
+# 不要忽略.gitignore自身
+!.gitignore
 
 # 其他常见的Python项目忽略项
 __pycache__/

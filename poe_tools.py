@@ -105,13 +105,99 @@ class PriceScraper(QThread):
         # 价格获取失败时返回0
         return 0.0
 
+class WebMonitor(QThread):
+    content_updated = pyqtSignal(str, str, str)  # 网站ID, 标题, 更新时间
+    
+    def __init__(self):
+        super().__init__()
+        self.websites = {
+            "adabd": {
+                "name": "A大补丁",
+                "url": "https://www.caimogu.cc/post/1962665.html",
+                "title_selector": "body > div.container.simple > div.content > div.post-content > div > div.title",
+                "time_selector": "body > div.container.simple > div.content > div.post-content > div > div.post-action-container > div > span.publish-time"
+            },
+            "wenzi": {
+                "name": "文子过滤",
+                "url": "https://www.caimogu.cc/post/1958342.html",
+                "title_selector": "body > div.container.simple > div.content > div.post-content > div > div.title",
+                "time_selector": "body > div.container.simple > div.content > div.post-content > div > div.post-action-container > div > span.publish-time"
+            },
+            "yile": {
+                "name": "一乐过滤",
+                "url": "https://www.caimogu.cc/post/1959368.html",  # 更新一乐过滤的正确URL
+                "title_selector": "body > div.container.simple > div.content > div.post-content > div > div.title",
+                "time_selector": "body > div.container.simple > div.content > div.post-content > div > div.post-action-container > div > span.publish-time"
+            },
+            "eshua": {
+                "name": "易刷查价",
+                "url": "https://www.caimogu.cc/post/1621584.html",  # 更新易刷查价的正确URL
+                "title_selector": "body > div.container.simple > div.content > div.post-content > div > div.title",
+                "time_selector": "body > div.container.simple > div.content > div.post-content > div > div.post-action-container > div > span.publish-time"
+            }
+        }
+        
+    def run(self):
+        # 网站顺序
+        site_order = ["adabd", "wenzi", "yile", "eshua"]
+        
+        for site_id in site_order:
+            try:
+                site_info = self.websites.get(site_id)
+                if not site_info:
+                    continue
+                
+                # 获取网站信息
+                title, update_time = self.get_website_info(site_info["url"], site_info["title_selector"], site_info["time_selector"])
+                if title and update_time:
+                    self.content_updated.emit(site_id, title, update_time)
+                
+                # 添加较长的延迟，避免被反爬机制拦截
+                self.msleep(3000)  # 每个请求间隔3秒
+            except Exception as e:
+                print(f"获取网站信息时出错 ({site_id}): {e}")
+    
+    def get_website_info(self, url, title_selector, time_selector):
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Referer': 'https://www.caimogu.cc/',
+                'Cache-Control': 'max-age=0',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
+            # 创建会话，启用重试机制
+            session = requests.Session()
+            retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
+            session.mount('https://', HTTPAdapter(max_retries=retries))
+            
+            response = session.get(url, headers=headers, timeout=15)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 提取标题
+            title_element = soup.select_one(title_selector)
+            title = title_element.text.strip() if title_element else "获取失败"
+            
+            # 提取更新时间
+            time_element = soup.select_one(time_selector)
+            update_time = time_element.text.strip() if time_element else "获取失败"
+            
+            return title, update_time
+            
+        except Exception as e:
+            print(f"抓取网页内容时出错: {e}")
+            return "获取失败", "获取失败"
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.10"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.10"
+        self.current_version = "1.0.11"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.11"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -122,6 +208,10 @@ class MainWindow(QMainWindow):
         # 添加刷新倒计时变量
         self.countdown_seconds = 300  # 5分钟倒计时
         self.start_time = datetime.now()  # 记录开始时间
+        
+        # 添加网站监控倒计时变量
+        self.web_countdown_seconds = 3600  # 60分钟倒计时
+        self.web_start_time = datetime.now()  # 记录网站监控开始时间
         
         # 清理缓存，确保字体大小一致
         self.clear_app_cache()
@@ -138,6 +228,22 @@ class MainWindow(QMainWindow):
         self.currency_names = {"divine": "神圣石", "exalted": "崇高石", "chaos": "混沌石"}
         self.currency_colors = {"divine": "#FFD700", "exalted": "#00BFFF", "chaos": "#FF6347"}
         
+        # 网站监控数据
+        self.website_data = {
+            "adabd": {"title": "加载中...", "update_time": "加载中...", "url": "https://www.caimogu.cc/post/1962665.html"},
+            "wenzi": {"title": "加载中...", "update_time": "加载中...", "url": "https://www.caimogu.cc/post/1958342.html"},
+            "yile": {"title": "加载中...", "update_time": "加载中...", "url": "https://www.caimogu.cc/post/1959368.html"},
+            "eshua": {"title": "加载中...", "update_time": "加载中...", "url": "https://www.caimogu.cc/post/1621584.html"}
+        }
+        
+        # 网站名称映射
+        self.website_names = {
+            "adabd": "A大补丁",
+            "wenzi": "文子过滤",
+            "yile": "一乐过滤",
+            "eshua": "易刷查价"
+        }
+        
         # 创建UI
         self.init_ui()
         
@@ -147,10 +253,21 @@ class MainWindow(QMainWindow):
         self.price_thread.finished.connect(self.on_price_refresh_finished)  # 添加完成信号处理
         self.price_thread.start()
         
+        # 启动网站监控线程
+        self.web_monitor_thread = WebMonitor()
+        self.web_monitor_thread.content_updated.connect(self.update_website_info)
+        self.web_monitor_thread.finished.connect(self.on_web_monitor_finished)
+        self.web_monitor_thread.start()
+        
         # 设置价格自动刷新定时器 - 每5分钟刷新一次
         self.price_refresh_timer = QTimer(self)
         self.price_refresh_timer.timeout.connect(self.refresh_prices)
         self.price_refresh_timer.start(300000)  # 5分钟 = 300000毫秒
+        
+        # 设置网站监控刷新定时器 - 每60分钟刷新一次
+        self.web_monitor_timer = QTimer(self)
+        self.web_monitor_timer.timeout.connect(self.refresh_websites)
+        self.web_monitor_timer.start(3600000)  # 60分钟 = 3600000毫秒
         
         # 设置倒计时更新定时器 - 每秒更新一次
         self.countdown_timer = QTimer(self)
@@ -714,9 +831,98 @@ class MainWindow(QMainWindow):
         bd_monitor_layout.setContentsMargins(20, 15, 20, 15)  # 减小边距
         bd_monitor_layout.setSpacing(5)  # 减小间距
         
+        # 添加网址监控选项卡
+        web_monitor_tab = QWidget()
+        web_monitor_layout = QVBoxLayout(web_monitor_tab)
+        web_monitor_layout.setContentsMargins(20, 20, 20, 20)
+        web_monitor_layout.setSpacing(10)  # 减小间距
+        
+        # 创建网址监控UI - 使用更紧凑的布局
+        web_monitor_grid = QGridLayout()
+        web_monitor_grid.setSpacing(10)  # 减小网格间距
+        
+        # 不添加表头行，直接添加网站内容
+        row = 0
+        for site_id, site_name in self.website_names.items():
+            # 网站名称
+            site_label = QLabel(site_name + ":")
+            site_label.setStyleSheet("color: #0078D7; font-weight: bold; font-size: 16px;")
+            web_monitor_grid.addWidget(site_label, row, 0)
+            
+            # 标题
+            title_label = QLabel("加载中...")
+            title_label.setStyleSheet("color: #888888; font-size: 16px;")
+            title_label.setWordWrap(True)  # 允许标题换行
+            title_label.setMinimumWidth(300)  # 设置最小宽度
+            setattr(self, f"{site_id}_title_label", title_label)
+            web_monitor_grid.addWidget(title_label, row, 1)
+            
+            # 更新时间
+            time_label = QLabel("加载中...")
+            time_label.setStyleSheet("color: #888888; font-size: 14px;")
+            setattr(self, f"{site_id}_time_label", time_label)
+            web_monitor_grid.addWidget(time_label, row, 2)
+            
+            # 跳转按钮
+            jump_button = QPushButton("跳转")
+            jump_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #0078D7;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #1C86E0;
+                }
+                QPushButton:pressed {
+                    background-color: #005A9E;
+                }
+            """)
+            jump_button.clicked.connect(lambda checked, url=self.website_data[site_id]["url"]: webbrowser.open(url))
+            jump_button.setFixedWidth(60)  # 减小按钮宽度
+            web_monitor_grid.addWidget(jump_button, row, 3)
+            
+            row += 1
+        
+        # 设置列的拉伸因子，使标题列获得更多空间
+        web_monitor_grid.setColumnStretch(0, 1)  # 网站名称列
+        web_monitor_grid.setColumnStretch(1, 5)  # 标题列获得更多空间
+        web_monitor_grid.setColumnStretch(2, 2)  # 更新时间列
+        web_monitor_grid.setColumnStretch(3, 0)  # 按钮列不拉伸
+        
+        # 添加网格布局到网址监控标签页
+        web_monitor_layout.addLayout(web_monitor_grid)
+        
+        # 底部布局 - 说明和倒计时
+        web_bottom_layout = QHBoxLayout()
+        
+        # 添加说明文本
+        web_note = QLabel("说明：数据每60分钟自动更新一次。")
+        web_note.setStyleSheet("color: #888888; margin-top: 10px; font-size: 16px;")
+        web_bottom_layout.addWidget(web_note)
+        
+        # 添加弹性空间，将倒计时推到右侧
+        web_bottom_layout.addStretch(1)
+        
+        # 添加倒计时标签
+        self.web_countdown_label = QLabel("下次刷新: 60:00")
+        self.web_countdown_label.setStyleSheet("color: #888888; margin-top: 10px; font-size: 14px;")
+        web_bottom_layout.addWidget(self.web_countdown_label)
+        
+        # 将底部布局添加到网址监控标签页
+        web_monitor_layout.addLayout(web_bottom_layout)
+        
+        # 添加弹性空间
+        web_monitor_layout.addStretch(1)
+        
         # 添加主选项卡
         tab_widget.clear()  # 清除所有现有标签
         tab_widget.addTab(price_tab, "价格监控")
+        tab_widget.addTab(web_monitor_tab, "网址监控")
         tab_widget.addTab(bd_monitor_tab, "BD监控")
         tab_widget.addTab(tools_tab, "A大补丁")
         tab_widget.addTab(easy_refresh_tab, "查价过滤汉化")
@@ -1263,6 +1469,11 @@ exit
             self.price_thread.terminate()
             self.price_thread.wait()
         
+        # 停止网站监控线程
+        if hasattr(self, 'web_monitor_thread') and self.web_monitor_thread.isRunning():
+            self.web_monitor_thread.terminate()
+            self.web_monitor_thread.wait()
+        
         # 停止所有定时器
         if hasattr(self, 'update_timer'):
             self.update_timer.stop()
@@ -1270,6 +1481,10 @@ exit
         # 停止价格刷新定时器
         if hasattr(self, 'price_refresh_timer'):
             self.price_refresh_timer.stop()
+        
+        # 停止网站监控定时器
+        if hasattr(self, 'web_monitor_timer'):
+            self.web_monitor_timer.stop()
         
         # 停止倒计时定时器
         if hasattr(self, 'countdown_timer'):
@@ -1325,23 +1540,95 @@ exit
     def update_countdown(self):
         """更新倒计时显示"""
         try:
-            # 计算剩余时间
+            # 价格监控倒计时
             elapsed_seconds = (datetime.now() - self.start_time).total_seconds()
             remaining_seconds = max(0, self.countdown_seconds - int(elapsed_seconds))
             
-            # 更新倒计时显示
+            # 更新价格倒计时显示
             minutes, seconds = divmod(remaining_seconds, 60)
             self.countdown_label.setText(f"下次刷新: {minutes:02d}:{seconds:02d}")
             
-            # 如果倒计时结束，且不是由于手动刷新触发的，则启动刷新
+            # 如果价格倒计时结束，且不是由于手动刷新触发的，则启动刷新
             if remaining_seconds == 0 and elapsed_seconds >= self.countdown_seconds:
                 # 避免多次触发刷新，将开始时间暂时设置为未来
                 self.start_time = datetime.now() + timedelta(seconds=10)
                 # 等待倒计时定时器下一次触发前刷新价格
                 QTimer.singleShot(100, self.refresh_prices)
+            
+            # 网址监控倒计时
+            web_elapsed_seconds = (datetime.now() - self.web_start_time).total_seconds()
+            web_remaining_seconds = max(0, self.web_countdown_seconds - int(web_elapsed_seconds))
+            
+            # 更新网址监控倒计时显示
+            web_minutes, web_seconds = divmod(web_remaining_seconds, 60)
+            self.web_countdown_label.setText(f"下次刷新: {web_minutes:02d}:{web_seconds:02d}")
+            
+            # 如果网址监控倒计时结束，且不是由于手动刷新触发的，则启动刷新
+            if web_remaining_seconds == 0 and web_elapsed_seconds >= self.web_countdown_seconds:
+                # 避免多次触发刷新，将开始时间暂时设置为未来
+                self.web_start_time = datetime.now() + timedelta(seconds=10)
+                # 等待倒计时定时器下一次触发前刷新网址监控
+                QTimer.singleShot(100, self.refresh_websites)
+                
         except Exception as e:
             # 出错时不影响程序运行
             print(f"更新倒计时出错: {e}")
+            
+    def refresh_websites(self):
+        """刷新网站监控数据"""
+        try:
+            # 检查是否已经有一个监控线程在运行
+            if hasattr(self, 'web_monitor_thread') and self.web_monitor_thread.isRunning():
+                return
+            
+            # 更新UI显示为"加载中..."
+            for site_id in self.website_data:
+                title_label = getattr(self, f"{site_id}_title_label", None)
+                time_label = getattr(self, f"{site_id}_time_label", None)
+                
+                if title_label:
+                    title_label.setText("加载中...")
+                    title_label.setStyleSheet("color: #888888;")
+                
+                if time_label:
+                    time_label.setText("加载中...")
+                    time_label.setStyleSheet("color: #888888;")
+            
+            # 创建新的网站监控线程
+            self.web_monitor_thread = WebMonitor()
+            self.web_monitor_thread.content_updated.connect(self.update_website_info)
+            self.web_monitor_thread.finished.connect(self.on_web_monitor_finished)
+            
+            # 启动线程
+            self.web_monitor_thread.start()
+            
+            # 重置倒计时
+            self.web_start_time = datetime.now()
+            self.web_countdown_seconds = 3600  # 60分钟
+        except Exception as e:
+            print(f"刷新网站监控时出错: {e}")
+
+    def update_website_info(self, site_id, title, update_time):
+        """更新网站信息"""
+        if site_id in self.website_data:
+            self.website_data[site_id]["title"] = title
+            self.website_data[site_id]["update_time"] = update_time
+            
+            # 更新UI显示
+            title_label = getattr(self, f"{site_id}_title_label", None)
+            if title_label:
+                title_label.setText(title)
+                title_label.setStyleSheet("color: white;")
+            
+            time_label = getattr(self, f"{site_id}_time_label", None)
+            if time_label:
+                time_label.setText(update_time)
+                time_label.setStyleSheet("color: #888888;")
+    
+    def on_web_monitor_finished(self):
+        """网站监控完成后的处理"""
+        # 可以在这里添加完成后的处理逻辑
+        pass
 
 if __name__ == "__main__":
     # 在创建QApplication之前设置高DPI属性

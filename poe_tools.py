@@ -196,8 +196,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # 版本信息
-        self.current_version = "1.0.11"  # 确保在使用之前初始化
-        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.11"
+        self.current_version = "1.0.12"  # 确保在使用之前初始化
+        self.update_url = "https://gitee.com/mexiaow/poe2-price-aid/raw/main/update.json?v=1.0.12"
         
         # 添加更新标志，避免重复检查
         self.is_updating = False
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
         self.clear_app_cache()
         
         # 在窗口标题中添加版本号
-        self.setWindowTitle(f"POE2PriceAid v{self.current_version}")
+        self.setWindowTitle(f"POE2PriceAid v{self.current_version} - 请勿分享到公共平台")
         self.setMinimumSize(900, 350)  # 调整宽度到900
         
         # 设置深色主题

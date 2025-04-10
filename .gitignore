@@ -6,7 +6,7 @@
 # 只同步以下指定文件
 !update.json
 !version.txt
-
+!filter.txt
 # 不要忽略.gitignore自身
 !.gitignore
 

@@ -8,6 +8,7 @@
 !version.txt
 !version_过滤器.txt
 !version_A大补丁.txt
+!version_Notice.txt
 # 不要忽略.gitignore自身
 !.gitignore
 

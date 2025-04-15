@@ -1,9 +1,8 @@
-# 公告文件配置 - POE2PriceAid
-# 格式说明：每行一条公告，用 | 分隔字段
-# 字段顺序：文本|颜色|HTML内容
-# 颜色可以是颜色名称或十六进制代码
-# HTML内容可选，如果不提供则使用文本作为内容
-# 以#开头的行会被忽略(用于注释)
-
-下周更新预告|#E91E63|<b>关于升华及其他改动</b><br>具体点击链接查看<br><a href="https://www.pathofexile.com/forum/view-thread/3755277">https://www.pathofexile.com/forum/view-thread/3755277</a>
+[
+  {
+    "text": "下周更新预告",
+    "color": "#E91E63",
+    "html": "<b>关于升华及其他改动</b><br>具体点击链接查看<br><a href=\"https://www.pathofexile.com/forum/view-thread/3755277\">https://www.pathofexile.com/forum/view-thread/3755277</a>"
+  }
+]
 

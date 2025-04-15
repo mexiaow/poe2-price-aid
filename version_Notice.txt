@@ -1,7 +1,7 @@
 [
   {
-    "text": "下周更新预告",
+    "text": "下周更新预告,点击查看详情",
     "color": "#E91E63",
-    "html": "<b>关于升华及其他改动</b><br>具体点击链接查看<br><a href=\"https://www.pathofexile.com/forum/view-thread/3755277\">https://www.pathofexile.com/forum/view-thread/3755277</a>"
+    "html": "<b>关于升华及其他改动</b><br><a href=\"https://www.pathofexile.com/forum/view-thread/3755277\">https://www.pathofexile.com/forum/view-thread/3755277</a>"
   }
 ]

@@ -1,8 +1,8 @@
 [
   {
-    "text": "POE2下周更新预告,升华及其他改动",
+    "text": "0.2.0f 补丁说明",
     "color": "#E91E63",
-    "html": "<b>关于升华及其他改动</b><br><a href=\"https://www.pathofexile.com/forum/view-thread/3755277\">https://www.pathofexile.com/forum/view-thread/3755277</a>"
+    "html": "<b>0.2.0f 补丁说明</b><br><a href=\"https://www.pathofexile.com/forum/view-thread/3762865">https://www.pathofexile.com/forum/view-thread/3762865</a>"
   }
 ]
 

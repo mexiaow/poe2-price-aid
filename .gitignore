@@ -1,27 +1,42 @@
-# 忽略所有文件和目录
-*
-**/*/
-**/**
-
-# 只同步以下指定文件
-!update.json
-!version.txt
-!version_过滤器.txt
-!version_A大补丁.txt
-!version_Notice.txt
-!version_A大补丁.json
-# 不要忽略.gitignore自身
-!.gitignore
-
-# 其他常见的Python项目忽略项
+# Python bytecode/cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-*.egg-info/
-*.egg
-.env
-.venv
+
+# Virtual environments
+.venv/
 venv/
 ENV/
+env/
+
+# Build artifacts
+dist/
+build/
+
+# Logs and coverage
+*.log
+logs/
+log/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
+AGENTS.md
+
+# Local secrets/config
+webdav.json
+.env
+*.local.json
+*.secret.*
+
+# Eggs/wheels (rare)
+*.egg-info/
+*.egg

@@ -40,3 +40,4 @@ webdav.json
 # Eggs/wheels (rare)
 *.egg-info/
 *.egg
+版本备份工具.bat

@@ -410,7 +410,7 @@ class FilterTab(QWidget):
         button_row.addWidget(self.install_button, 0, Qt.AlignLeft)
         
         # 打开目录按钮 - 增加宽度确保文字完全显示
-        self.open_dir_button = QPushButton("打开目录")
+        self.open_dir_button = QPushButton("打开过滤器目录")
         self.open_dir_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;

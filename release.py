@@ -503,164 +503,21 @@ def clean_cache_before_packaging():
         return False
 
 def run_pyinstaller():
-    """运行PyInstaller打包应用"""
+    """运行PyInstaller打包应用（不处理任何UPX相关逻辑）"""
     print("🔧 正在打包应用程序...")
     try:
-        # 检查UPX是否安装
-        upx_dir = None
-        upx_executable = None
-        
-        # 首先检查本地upx目录
-        local_upx_path = os.path.join(os.getcwd(), 'upx', 'upx.exe')
-        if os.path.exists(local_upx_path):
-            upx_executable = local_upx_path
-            upx_dir = os.path.dirname(upx_executable)
-            print(f"✅ 找到本地UPX: {upx_executable}")
-            
-            # 尝试获取UPX版本信息
-            try:
-                upx_version_result = subprocess.run([upx_executable, '--version'], 
-                                                  capture_output=True, text=True, 
-                                                  timeout=5)
-                if upx_version_result.returncode == 0:
-                    upx_version = upx_version_result.stdout.strip().split('\n')[0]
-                    print(f"UPX版本: {upx_version}")
-            except Exception as e:
-                print(f"⚠️ 无法获取本地UPX版本信息: {e}")
-        else:
-            # 如果本地没有找到，再尝试在系统PATH中查找
-            try:
-                # 先尝试直接运行upx命令
-                upx_result = subprocess.run(['upx', '--version'], 
-                                         capture_output=True, text=True, 
-                                         timeout=5)
-                if upx_result.returncode == 0:
-                    upx_version = upx_result.stdout.strip().split('\n')[0]
-                    print(f"✅ 找到系统UPX: {upx_version}")
-                    
-                    # 获取UPX可执行文件路径
-                    if os.name == 'nt':  # Windows
-                        try:
-                            where_result = subprocess.run(['where', 'upx'], 
-                                                        capture_output=True, text=True)
-                            if where_result.returncode == 0:
-                                upx_executable = where_result.stdout.strip().split('\n')[0]
-                                upx_dir = os.path.dirname(upx_executable)
-                                print(f"系统UPX可执行文件路径: {upx_executable}")
-                        except Exception as e:
-                            print(f"获取系统UPX路径失败: {e}")
-                    else:  # Linux/Mac
-                        try:
-                            which_result = subprocess.run(['which', 'upx'], 
-                                                        capture_output=True, text=True)
-                            if which_result.returncode == 0:
-                                upx_executable = which_result.stdout.strip()
-                                upx_dir = os.path.dirname(upx_executable)
-                                print(f"系统UPX可执行文件路径: {upx_executable}")
-                        except Exception as e:
-                            print(f"获取系统UPX路径失败: {e}")
-            except Exception as e:
-                print(f"⚠️ 系统中未安装UPX或未在PATH中: {e}")
-        
-        # 如果没有找到UPX，显示提示
-        if not upx_executable:
-            print("⚠️ 未找到UPX可执行文件")
-            print("注意：UPX压缩已在main.spec中禁用，不会使用UPX压缩")
-        else:
-            print("📦 虽然检测到UPX，但UPX压缩已在main.spec文件中禁用(upx=False)")
-            print("注意：生成的可执行文件将不会使用UPX压缩")
-        
-        # 首先尝试使用系统的PyInstaller命令
-        print("尝试使用系统的PyInstaller命令...")
-        command = ['pyinstaller', 'main.spec']
-        
-        # 添加UPX相关参数（如果找到UPX）
-        if upx_dir:
-            # 确保路径中不含空格，如果有则添加引号
-            upx_dir_param = upx_dir
-            if ' ' in upx_dir:
-                if os.name == 'nt':  # Windows
-                    upx_dir_param = f'"{upx_dir}"'
-                else:
-                    upx_dir_param = f"'{upx_dir}'"
-                    
-            print(f"添加UPX目录参数: --upx-dir={upx_dir_param}")
-            command.append(f'--upx-dir={upx_dir_param}')
-            
-            # 注意：UPX压缩选项在main.spec文件中已配置，不需要在命令行添加--upx-opts参数
-        
-        # 如果直接命令失败，可以尝试使用Python调用的方式
-        use_python_module = False
-        
-        try:
-            # 测试PyInstaller命令是否可用
-            test_result = subprocess.run(['pyinstaller', '--version'], 
-                                        capture_output=True, text=True, 
-                                        timeout=5)  # 添加超时以防止挂起
-            print(f"PyInstaller版本: {test_result.stdout.strip()}")
-        except Exception as e:
-            print(f"直接运行PyInstaller命令失败: {e}")
-            print("将尝试使用Python模块方式调用...")
-            use_python_module = True
-        
-        if use_python_module:
-            # 使用Python -m pyinstaller方式调用
-            print("使用Python模块方式调用PyInstaller...")
-            command = [sys.executable, '-m', 'PyInstaller']
-            # 添加main.spec参数
-            command.append('main.spec')
-            # 添加UPX相关参数（如果找到UPX）
-            if upx_dir:
-                command.append(f'--upx-dir={upx_dir_param}')
-                # 注意：UPX压缩选项在main.spec文件中已配置，不需要在命令行添加--upx-opts参数
-        
-        # 运行打包命令
+        command = ['pyinstaller', '--clean', '--noconfirm', 'main.spec']
         print(f"执行命令: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True)
-        
+        result = subprocess.run(command)
         if result.returncode != 0:
-            print("❌ 打包失败！错误信息:")
-            print(result.stderr)
-            
-            # 如果之前没有使用Python模块方式，现在尝试
-            if not use_python_module:
-                print("尝试使用Python模块方式调用PyInstaller...")
-                module_command = [sys.executable, '-m', 'PyInstaller', 'main.spec']
-                # 添加UPX相关参数（如果找到UPX）
-                if upx_dir:
-                    module_command.append(f'--upx-dir={upx_dir_param}')
-                    # 注意：UPX压缩选项在main.spec文件中已配置，不需要在命令行添加--upx-opts参数
-                
-                print(f"执行命令: {' '.join(module_command)}")
-                result = subprocess.run(module_command, capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    print("❌ 使用Python模块方式也失败了！错误信息:")
-                    print(result.stderr)
-                    return False
-                else:
-                    print("✅ 使用Python模块方式打包成功")
-                    print("📦 已禁用UPX压缩，生成的可执行文件不会使用UPX压缩")
-                    return True
+            print("❌ 打包失败")
             return False
-        
         print("✅ 应用程序打包成功")
-        print("📦 已禁用UPX压缩，生成的可执行文件不会使用UPX压缩")
         return True
     except Exception as e:
         print(f"❌ 执行pyinstaller命令失败: {e}")
         import traceback
         traceback.print_exc()
-        
-        # 根据错误类型提供更具体的解决方案
-        if "No module named" in str(e):
-            print("\n解决方案: 请安装PyInstaller模块")
-            print("  pip install pyinstaller")
-        elif "not recognized" in str(e) or "找不到" in str(e):
-            print("\n解决方案: PyInstaller可能未正确安装或不在PATH中")
-            print("  1. 尝试重新安装: pip install pyinstaller")
-            print("  2. 或者直接运行: python -m PyInstaller main.spec")
-            
         return False
 
 def copy_to_desktop(version):
@@ -708,7 +565,7 @@ def copy_to_desktop(version):
         print(f"❌ 复制到桌面失败: {e}")
         import traceback
         traceback.print_exc()
-        return False
+    return False
 
 def clean_build_directory():
     """清理build目录和__pycache__目录"""
@@ -743,66 +600,6 @@ def clean_build_directory():
     except Exception as e:
         print(f"❌ 清理构建和缓存目录失败: {e}")
         return False
-
-def check_upx_installed():
-    """检查UPX是否安装，返回(是否安装, 可执行文件路径)"""
-    # 首先检查本地UPX
-    local_upx_path = os.path.join(os.getcwd(), 'upx', 'upx.exe')
-    
-    if os.path.exists(local_upx_path):
-        try:
-            # 测试本地UPX是否可用
-            result = subprocess.run([local_upx_path, '--version'], 
-                                  capture_output=True, text=True, 
-                                  timeout=5)
-            if result.returncode == 0:
-                print(f"✅ 本地UPX可用: {local_upx_path}")
-                return True, local_upx_path
-        except Exception as e:
-            print(f"⚠️ 本地UPX存在但不可用: {e}")
-    
-    # 如果本地UPX不可用，检查系统UPX
-    try:
-        # 先尝试直接运行upx命令
-        upx_result = subprocess.run(['upx', '--version'], 
-                                 capture_output=True, text=True, 
-                                 timeout=5)
-        if upx_result.returncode == 0:
-            # 获取系统UPX路径
-            upx_path = None
-            if os.name == 'nt':  # Windows
-                try:
-                    where_result = subprocess.run(['where', 'upx'], 
-                                                capture_output=True, text=True)
-                    if where_result.returncode == 0:
-                        upx_path = where_result.stdout.strip().split('\n')[0]
-                except Exception:
-                    pass
-            else:  # Linux/Mac
-                try:
-                    which_result = subprocess.run(['which', 'upx'], 
-                                                capture_output=True, text=True)
-                    if which_result.returncode == 0:
-                        upx_path = which_result.stdout.strip()
-                except Exception:
-                    pass
-            
-            print(f"✅ 系统UPX可用" + (f": {upx_path}" if upx_path else ""))
-            return True, upx_path if upx_path else "upx"  # 如果找不到路径，返回命令名
-    except Exception as e:
-        print(f"⚠️ 系统中未安装UPX: {e}")
-    
-    return False, None
-
-def compress_with_upx():
-    """[已弃用] 使用UPX压缩二进制文件
-    
-    该功能已弃用，且UPX压缩已在main.spec文件中禁用(upx=False)。
-    生成的可执行文件将不会使用UPX压缩。
-    """
-    print("🔍 注意：UPX压缩已在main.spec文件中禁用(upx=False)")
-    print("✅ 生成的可执行文件不会使用UPX压缩")
-    return True
 
 def commit_and_push(version):
     """提交所有更改并推送到Gitee和GitHub仓库"""
@@ -979,11 +776,6 @@ def main():
         print("已取消操作")
         return
     
-    # 设置不使用UPX压缩
-    use_extra_upx = False
-    compression_level = 0  # 压缩级别设为0表示不压缩
-    print("✅ UPX压缩已在main.spec中禁用，将生成不使用UPX压缩的可执行文件")
-    
     print("\n🚀 开始执行发布流程...\n")
     
     # 1. 更新modules/config.py中的版本号
@@ -1021,12 +813,7 @@ def main():
     # 8. 清理build目录
     clean_build_directory()
     
-    # 9. UPX压缩已经在main.spec中禁用
-    print("\n📦 UPX压缩已在main.spec文件中禁用(upx=False)")
-    # 调用已弃用的函数只是为了显示信息
-    compress_with_upx()
-    
-    # 10. 提交和推送到Gitee和GitHub
+    # 9. 提交和推送到Gitee和GitHub
     commit_and_push(new_version)
     
     print("\n✨ 发布流程完成! ✨")

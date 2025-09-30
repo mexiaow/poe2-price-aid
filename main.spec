@@ -3,7 +3,6 @@ import os
 import sys
 import codecs  # 添加 codecs 模块用于处理编码
 import re  # 用于正则表达式匹配版本号
-import subprocess  # 用于检测UPX
 
 # 从modules/config.py中提取版本号
 version = "1.0.0"  # 默认版本号
@@ -31,62 +30,7 @@ if hasattr(sys, '_MEIPASS'):
 python_version = f"python{sys.version_info.major}{sys.version_info.minor}.dll"
 print(f"使用Python版本: {python_version}")
 
-# 检测UPX是否安装及其路径
-upx_executable = None
-upx_dir = None
-
-# 首先检查本地upx目录
-local_upx_path = os.path.join(os.getcwd(), 'upx', 'upx.exe')
-if os.path.exists(local_upx_path):
-    upx_executable = local_upx_path
-    upx_dir = os.path.dirname(upx_executable)
-    print(f"找到本地UPX: {upx_executable}")
-    print(f"UPX目录: {upx_dir}")
-else:
-    # 如果本地没有找到，再尝试在系统PATH中查找
-    try:
-        # 先尝试直接运行upx命令
-        result = subprocess.run(['upx', '--version'], 
-                             capture_output=True, text=True, 
-                             timeout=5)  # 添加超时以防止挂起
-        if result.returncode == 0:
-            upx_version = result.stdout.strip().split('\n')[0]
-            print(f"找到系统UPX: {upx_version}")
-            
-            # 尝试获取upx可执行文件的完整路径
-            if sys.platform == 'win32':
-                # Windows系统使用where命令
-                try:
-                    where_result = subprocess.run(['where', 'upx'], 
-                                                capture_output=True, text=True)
-                    if where_result.returncode == 0:
-                        upx_executable = where_result.stdout.strip().split('\n')[0]
-                        upx_dir = os.path.dirname(upx_executable)
-                        print(f"系统UPX可执行文件位置: {upx_executable}")
-                        print(f"系统UPX目录: {upx_dir}")
-                except Exception as e:
-                    print(f"获取系统UPX路径失败: {e}")
-            else:
-                # Linux/Mac系统使用which命令
-                try:
-                    which_result = subprocess.run(['which', 'upx'], 
-                                                capture_output=True, text=True)
-                    if which_result.returncode == 0:
-                        upx_executable = which_result.stdout.strip()
-                        upx_dir = os.path.dirname(upx_executable)
-                        print(f"系统UPX可执行文件位置: {upx_executable}")
-                        print(f"系统UPX目录: {upx_dir}")
-                except Exception as e:
-                    print(f"获取系统UPX路径失败: {e}")
-    except Exception as e:
-        print(f"系统中未安装UPX或未在PATH中: {e}")
-
-# 如果没有找到UPX，显示提示
-if not upx_executable:
-    print("未找到UPX可执行文件")
-    print("如需使用UPX压缩减小文件体积，请安装UPX: https://upx.github.io/")
-    print("或将UPX添加到系统PATH中")
-    print("或将UPX放在项目根目录的upx文件夹中")
+# 已移除所有UPX检测与提示，打包始终不使用UPX
 
 block_cipher = None
 
@@ -190,28 +134,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 # 使用带版本号的文件名
 exe_name = f'POE2PriceAid_v{version}'
 
-# 定义UPX压缩排除的文件类型
-# - Python DLL必须排除以避免兼容性问题
-# - 系统关键DLL应该排除以避免潜在问题
-# - 其他类型的文件可以安全地压缩以减小体积
-upx_exclude_patterns = [
-    python_version,            # 当前Python版本DLL
-    'python3*.dll',            # 所有Python 3.x DLL
-    'vcruntime*.dll',          # Visual C++ Runtime DLL
-    'VCRUNTIME*.dll',
-    'api-ms-win-*.dll',        # Windows API DLL
-    'KERNEL*.dll',             # 核心系统DLL
-    'msvcr*.dll',              # Microsoft Visual C Runtime
-    'msvcp*.dll',
-]
-
-# 配置UPX选项
-# 使用'--best'和'--lzma'获得更好的压缩率
-upx_options = ['--best', '--lzma']
-if upx_executable:
-    print(f"将使用UPX压缩，选项: {' '.join(upx_options)}")
-else:
-    print("未找到UPX，将使用默认系统搜索路径")
+# 无UPX选项或排除设置
 
 exe = EXE(
     pyz,

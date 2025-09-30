@@ -106,6 +106,8 @@ a = Analysis(
         'chardet',
         'urllib3',
         'lxml',
+        'py7zr',
+        'psutil',
         'json',
         'datetime',
         'modules.config',

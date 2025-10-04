@@ -29,7 +29,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 .claude/
-AGENTS.md
+#AGENTS.md
 
 # Local secrets/config
 webdav.json

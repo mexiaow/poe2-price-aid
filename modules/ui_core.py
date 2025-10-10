@@ -695,7 +695,7 @@ class MainWindow(QMainWindow):
         self.notice_label.setStyleSheet(f"""
             color: {color}; 
             font-family: "Microsoft YaHei", "微软雅黑", "Microsoft YaHei UI", "Microsoft JhengHei", "微软正黑体", "SimHei", "黑体", "SimSun", "宋体", "NSimSun", "新宋体", "Arial", "Helvetica", sans-serif;
-            font-size: 14px; 
+            font-size: 16px; 
             font-weight: bold; 
             background-color: rgba(40, 40, 40, 0.7);
             border-radius: 4px;

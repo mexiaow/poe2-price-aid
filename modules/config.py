@@ -50,10 +50,10 @@ class Config:
     NOTICE_CONFIG = {
         "url": "https://gitee.com/mexiaow/poe2-price-aid/raw/main/version_Notice.txt",  # 公告数据URL
         "local_file": "version_Notice.txt",  # 本地公告文件名
-        "rotation_interval": 5000,  # 公告轮播间隔（毫秒）
+        "rotation_interval": 15000,  # 公告轮播间隔（毫秒）→ 15秒
         "default_notice": "双击标签可刷新相应数据",  # 最终后备公告（当所有其他获取方式失败时使用）
         "max_notices": 5,  # 最多显示的公告数量
-        "refresh_interval": 15 * 60 * 1000  # 公告刷新间隔（毫秒），默认15分钟
+        "refresh_interval": 30 * 60 * 1000  # 公告刷新间隔（毫秒）→ 30分钟
     }
     
     # 网站数据

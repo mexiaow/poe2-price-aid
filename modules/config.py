@@ -113,7 +113,6 @@ class Config:
     NAVIGATION_LINKS = [
         ("编年史", "https://poe2db.tw/cn/"),
         ("官网", "https://poe2.qq.com/main.shtml"),
-        ("BD数据库", "https://poe2.caimogu.cc/planner#/plan/community-builds"),
         ("忍者", "https://poe.ninja/poe2/builds"),
         ("市集", "https://poe.game.qq.com/trade2/search/poe2/"),
         ("易刷", "https://cyurl.cn/eshua")

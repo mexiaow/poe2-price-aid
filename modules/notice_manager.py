@@ -325,7 +325,8 @@ class NoticeManager(QObject):
                          .replace("<", "&lt;")
                          .replace(">", "&gt;"))
 
-            url_pattern = re.compile(r"(https?://[^\s<>"]+)", re.IGNORECASE)
+            # 使用单引号包裹原始字符串，避免字符类中的双引号与字符串定界符冲突
+            url_pattern = re.compile(r'(https?://[^\s<>"]+)', re.IGNORECASE)
 
             notices = []
             for block in blocks[: self.max_notices]:

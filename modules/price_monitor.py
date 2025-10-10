@@ -35,7 +35,7 @@ class PriceScraper(QThread):
                 if price > 0:  # 只有当价格有效时才发送信号
                     self.price_updated.emit(currency, price)
                     # 添加短暂延迟，避免请求过快
-                    self.msleep(500)
+                    self.msleep(10)
             except Exception as e:
                 pass
     

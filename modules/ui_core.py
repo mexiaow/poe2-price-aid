@@ -119,12 +119,12 @@ class MainWindow(QMainWindow):
         self.update_notice_label("正在加载公告...", "#FFA500")
         
         # 在事件循环启动后再启动公告管理器，延后2秒，进一步降低启动时网络负担
-        QTimer.singleShot(3500, self.notice_manager.start)
+        QTimer.singleShot(4000, self.notice_manager.start)
         
         # 启动后统一延迟3秒拉取（与公告2秒错开）；若用户已提前进入对应标签页，会被幂等标记跳过
-        QTimer.singleShot(4000, self._schedule_web_monitor_initial)
-        QTimer.singleShot(3000, self._schedule_apatch_initial)
-        QTimer.singleShot(3000, self._schedule_filter_initial)
+        QTimer.singleShot(4500, self._schedule_web_monitor_initial)
+        QTimer.singleShot(4000, self._schedule_apatch_initial)
+        QTimer.singleShot(4000, self._schedule_filter_initial)
         
         # 如果隐藏功能已启用，在UI初始化后激活隐藏功能
         if Config.HIDDEN_FEATURES["enabled"]:

@@ -128,7 +128,7 @@ class UpdateChecker(QObject):
         # 进度对话框
         self.progress_dialog = None
     
-    def start_auto_check(self, delay_ms=5000):
+    def start_auto_check(self, delay_ms=3000):
         """启动延迟自动检查 (仅用于程序启动时的一次性检测，非周期性定时检测)
         
         本方法仅在程序启动后执行一次检测，不会设置周期性的定时检测。

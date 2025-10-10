@@ -1,8 +1,15 @@
-[
-  {
-    "text": ">>点击前往「金秋共贺礼」<<",
-    "color": "#E91E63",
-    "html": "<p><strong>&middot;&nbsp;</strong>活动时间：9月29日10:00-10月12日23:59</p><p><strong>&middot;&nbsp;</strong>活动入口：<a href="https://poe2.qq.com/cp/a20250918national/index.html" target="_self">&gt;&gt;点击前往「金秋共贺礼」&lt;&lt;</a></p>"
-  }
-]
+>>点击前往「金秋共贺礼」<< [#E91E63]
+活动时间：9月29日10:00-10月12日23:59
+活动入口：https://poe2.qq.com/cp/a20250918national/index.html
 
+---
+新版本 v3.0.19 发布 [#00FFFF]
+更新要点：
+- 公告支持纯文本/Markdown 写法
+- 顶部滚动展示第一行标题
+下载地址：https://poe2.1232323.xyz/d/POE2PriceAid/releases
+
+---
+小提示
+双击标签可刷新相应数据；若网络超时，可稍后重试
+项目主页：https://gitee.com/mexiaow/poe2-price-aid

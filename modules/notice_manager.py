@@ -254,7 +254,14 @@ class NoticeManager(QObject):
                     error_context = lines[error_line - 1]
                     if isinstance(error_pos, int) and error_pos < len(error_context):
                         print(f"错误附近内容: ...{error_context[max(0, error_pos-20):error_pos]}[HERE]{error_context[error_pos:error_pos+20]}...")
-                raise
+                # JSON 失败时，尝试按“纯文本/Markdown”解析，降低编辑复杂度
+                print("回退：尝试按纯文本/Markdown 风格解析公告...")
+                self.notices = self._parse_plain_or_markdown_notices(content)
+                if self.notices:
+                    print(f"纯文本/Markdown 公告解析成功: {len(self.notices)} 条")
+                else:
+                    # 保持一致的异常路径，让外层按本地/默认回退
+                    raise
                 
         except Exception as e:
             error_msg = f"解析公告内容失败: {str(e)}"
@@ -267,6 +274,90 @@ class NoticeManager(QObject):
         # 只有当有公告时才显示，否则让调用者处理
         if self.notices:
             self.show_current_notice()
+
+    def _parse_plain_or_markdown_notices(self, content):
+        """将非 JSON 内容解析为公告列表（支持纯文本/简易 Markdown）。
+
+        约定与示例：
+        - 多条公告以单独一行的分隔符“---”分隔；无分隔符则视为单条。
+        - 每条公告第一行作为标题/简述，用于顶部滚动条展示。
+        - 可在标题末尾用“[#RRGGBB]”指定颜色，例如：标题文本 [#E91E63]
+        - 正文任意多行，支持自动换行与链接自动识别（http/https）。
+
+        Args:
+            content: 原始文本
+        Returns:
+            list[dict]: [{"text": str, "color": str, "html": str}, ...]
+        """
+        try:
+            import re
+
+            # 标准化换行并按分隔符切块
+            text = content.replace("\r\n", "\n").replace("\r", "\n")
+            raw_blocks = []
+            tmp = []
+            for line in text.split("\n"):
+                if line.strip() == '---':
+                    # 遇到分隔符，结束当前块
+                    raw_blocks.append("\n".join(tmp).strip())
+                    tmp = []
+                else:
+                    tmp.append(line)
+            if tmp:
+                raw_blocks.append("\n".join(tmp).strip())
+
+            # 若全部为空则返回空
+            blocks = [b for b in raw_blocks if b]
+            if not blocks:
+                return []
+
+            def extract_color_from_title(title):
+                # 支持在标题末尾使用 [#RRGGBB] 指定颜色
+                m = re.search(r"\[(#[0-9a-fA-F]{6})\]\s*$", title)
+                if m:
+                    color = m.group(1)
+                    title = re.sub(r"\s*\[(#[0-9a-fA-F]{6})\]\s*$", "", title).strip()
+                    return title, color
+                return title.strip(), "#FFA500"
+
+            def escape_html(s):
+                return (s.replace("&", "&amp;")
+                         .replace("<", "&lt;")
+                         .replace(">", "&gt;"))
+
+            url_pattern = re.compile(r"(https?://[^\s<>"]+)", re.IGNORECASE)
+
+            notices = []
+            for block in blocks[: self.max_notices]:
+                lines = [ln for ln in block.split("\n")]
+                # 找到第一条非空行作为标题
+                title_line = next((ln for ln in lines if ln.strip()), "").strip()
+                if not title_line:
+                    # 没有标题的块跳过
+                    continue
+
+                title, color = extract_color_from_title(title_line)
+
+                # 构造 HTML：标题 + 正文（自动链接 + 换行）
+                escaped_lines = []
+                for ln in lines:
+                    ln_esc = escape_html(ln)
+                    ln_esc = url_pattern.sub(r'<a href="\1" target="_blank">\1</a>', ln_esc)
+                    escaped_lines.append(ln_esc)
+                body_html = "<br>".join(escaped_lines)
+                html = f"<h3 style=\"margin:0 0 8px 0;\">{escape_html(title)}</h3>" \
+                       f"<div style=\"line-height:1.6;\">{body_html}</div>"
+
+                notices.append({
+                    "text": title,
+                    "color": color,
+                    "html": html
+                })
+
+            return notices
+        except Exception as e:
+            print(f"纯文本/Markdown 公告解析失败: {e}")
+            return []
     
     def rotate_notice(self):
         """轮播下一条公告"""

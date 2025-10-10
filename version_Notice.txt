@@ -1,8 +1,11 @@
 [
   {
-    "text": "已切换至国服版本",
+    "text": ">>点击前往「金秋共贺礼」<<",
     "color": "#E91E63",
-    "html": "<b>已切换至国服版本</b>"
+    "html": "<p><strong>&middot;&nbsp;</strong>活动时间：9月29日10:00-10月12日23:59</p>
+
+<p><strong>&middot;&nbsp;</strong>活动入口：<a href="https://poe2.qq.com/cp/a20250918national/index.html" target="_self">&gt;&gt;点击前往「金秋共贺礼」&lt;&lt;</a></p>
+"
   }
 ]
 

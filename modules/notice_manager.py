@@ -138,6 +138,7 @@ class NoticeManager(QObject):
     def fetch_notices(self):
         """获取公告数据(JSON格式)"""
         try:
+            
             # 从服务器获取
             print(f"正在从 {self.notice_url} 获取公告数据...")
             headers = {
@@ -174,6 +175,14 @@ class NoticeManager(QObject):
             error_msg = f"获取公告失败: {str(e)}，尝试加载本地文件..."
             print(error_msg)
             self._load_local_notices()
+
+    def _get_local_file_path(self):
+        """获取本地公告文件路径（打包/源码两种模式）"""
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_path, self.local_file)
     
     def _load_local_notices(self):
         """从本地文件加载公告(JSON格式)"""
@@ -332,7 +341,8 @@ class NoticeManager(QObject):
             for block in blocks[: self.max_notices]:
                 lines = [ln for ln in block.split("\n")]
                 # 找到第一条非空行作为标题
-                title_line = next((ln for ln in lines if ln.strip()), "").strip()
+                first_idx = next((i for i, ln in enumerate(lines) if ln.strip()), None)
+                title_line = lines[first_idx].strip() if first_idx is not None else ""
                 if not title_line:
                     # 没有标题的块跳过
                     continue
@@ -340,14 +350,17 @@ class NoticeManager(QObject):
                 title, color = extract_color_from_title(title_line)
 
                 # 构造 HTML：标题 + 正文（自动链接 + 换行）
+                # 详情正文不重复标题，从标题下一行开始
+                body_lines = lines[first_idx + 1:] if first_idx is not None else []
                 escaped_lines = []
-                for ln in lines:
+                for ln in body_lines:
                     ln_esc = escape_html(ln)
                     ln_esc = url_pattern.sub(r'<a href="\1" target="_blank">\1</a>', ln_esc)
                     escaped_lines.append(ln_esc)
-                body_html = "<br>".join(escaped_lines)
-                html = f"<h3 style=\"margin:0 0 8px 0;\">{escape_html(title)}</h3>" \
-                       f"<div style=\"line-height:1.6;\">{body_html}</div>"
+                body_html = "<br>".join(escaped_lines) if escaped_lines else ""
+                html = f"<h3 style=\"margin:0 0 8px 0;\">{escape_html(title)}</h3>"
+                if body_html:
+                    html += f"<div style=\"line-height:1.6;\">{body_html}</div>"
 
                 notices.append({
                     "text": title,

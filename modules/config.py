@@ -111,7 +111,7 @@ class Config:
     
     # 导航链接配置
     NAVIGATION_LINKS = [
-        ("资料站", "https://poe2cn.caimogu.cc/"),
+        ("编年史", "https://poe2db.tw/cn/"),
         ("官网", "https://poe2.qq.com/main.shtml"),
         ("BD数据库", "https://poe2.caimogu.cc/planner#/plan/community-builds"),
         ("忍者", "https://poe.ninja/poe2/builds"),

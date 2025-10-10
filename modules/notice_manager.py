@@ -7,7 +7,7 @@ import os
 import sys
 import json
 import time
-from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal, QThread
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QTextBrowser
 from PyQt5.QtGui import QColor
 
@@ -117,6 +117,8 @@ class NoticeManager(QObject):
         # 状态标志
         self.rotation_paused = False
         self.showing_status = False
+        self._fetching = False
+        self._fetch_thread = None
     
     def start(self):
         """启动公告管理器"""
@@ -136,45 +138,67 @@ class NoticeManager(QObject):
         self.refresh_timer.stop()
     
     def fetch_notices(self):
-        """获取公告数据(JSON格式)"""
+        """获取公告数据（仅纯文本/Markdown），在后台线程执行网络请求，避免阻塞UI。"""
+        if self._fetching:
+            return
+        self._fetching = True
+
+        class NoticeFetchThread(QThread):
+            fetched = pyqtSignal(str)
+            failed = pyqtSignal(str)
+
+            def __init__(self, url):
+                super().__init__()
+                self.url = url
+
+            def run(self):
+                try:
+                    try:
+                        import requests  # 确保在工作线程中导入，避免主线程阻塞
+                    except ImportError:
+                        self.failed.emit("缺少requests库")
+                        return
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    resp = requests.get(self.url, headers=headers, timeout=5)
+                    if resp.status_code == 200 and resp.text.strip():
+                        self.fetched.emit(resp.text)
+                    else:
+                        self.failed.emit(f"HTTP {resp.status_code}")
+                except Exception as e:
+                    self.failed.emit(str(e))
+
+        print(f"正在从 {self.notice_url} 获取公告数据(纯文本/Markdown, 异步)...")
+        self._fetch_thread = NoticeFetchThread(self.notice_url)
+        self._fetch_thread.fetched.connect(self._on_fetch_success)
+        self._fetch_thread.failed.connect(self._on_fetch_failed)
+        self._fetch_thread.finished.connect(self._on_fetch_finished)
+        self._fetch_thread.start()
+
+    def _on_fetch_success(self, text):
         try:
-            
-            # 从服务器获取
-            print(f"正在从 {self.notice_url} 获取公告数据...")
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            response = requests.get(self.notice_url, headers=headers, timeout=5)
-            
-            if response.status_code == 200 and response.text.strip():
-                print(f"成功获取公告数据: {len(response.text)} 字节")
-                # 输出获取到的前100个字符，帮助调试
-                print(f"获取内容预览: {response.text[:100].replace('\n', '\\n')}")
-                
-                # 验证是否是JSON格式
-                if response.text.strip().startswith('{') or response.text.strip().startswith('['):
-                    print("内容疑似JSON格式，尝试解析...")
-                else:
-                    print("警告：内容可能不是JSON格式，解析可能会失败")
-                
-                self._parse_notices(response.text)
-                
-                # 如果解析后仍然没有公告，尝试加载本地文件
-                if not self.notices:
-                    print("解析远程公告失败，尝试加载本地文件...")
-                    self._load_local_notices()
-            else:
-                # 如果服务器获取失败，尝试加载本地文件
-                error_msg = f"获取公告失败，服务器返回: {response.status_code}，尝试加载本地文件..."
-                print(error_msg)
+            print(f"成功获取公告数据: {len(text)} 字节")
+            print(f"获取内容预览: {text[:100].replace('\n', '\\n')}")
+            self._parse_notices(text)
+            if not self.notices:
+                print("解析远程公告失败，尝试加载本地文件...")
                 self._load_local_notices()
-        
         except Exception as e:
-            # 出错时，尝试加载本地文件
-            error_msg = f"获取公告失败: {str(e)}，尝试加载本地文件..."
-            print(error_msg)
+            print(f"处理公告获取结果失败: {e}")
             self._load_local_notices()
+
+    def _on_fetch_failed(self, msg):
+        print(f"获取公告失败({msg})，尝试加载本地文件...")
+        self._load_local_notices()
+
+    def _on_fetch_finished(self):
+        self._fetching = False
+        try:
+            if self._fetch_thread:
+                self._fetch_thread.deleteLater()
+        except Exception:
+            pass
 
     def _get_local_file_path(self):
         """获取本地公告文件路径（打包/源码两种模式）"""
@@ -185,7 +209,7 @@ class NoticeManager(QObject):
         return os.path.join(base_path, self.local_file)
     
     def _load_local_notices(self):
-        """从本地文件加载公告(JSON格式)"""
+        """从本地文件加载公告（纯文本/Markdown）"""
         try:
             # 确定本地文件路径
             if getattr(sys, 'frozen', False):
@@ -201,7 +225,7 @@ class NoticeManager(QObject):
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    print("本地文件加载成功，尝试解析JSON格式...")
+                    print("本地文件加载成功，按纯文本/Markdown解析...")
                     self._parse_notices(content)
                     
                 # 如果本地文件解析后仍然没有公告，使用默认公告
@@ -225,63 +249,20 @@ class NoticeManager(QObject):
         self.show_current_notice()
     
     def _parse_notices(self, content):
-        """解析公告内容
-        
-        Args:
-            content: 公告内容文本(JSON格式)
-        """
+        """解析公告内容（纯文本/Markdown）"""
         try:
-            # 检查内容是否有效
             if not content or not content.strip():
                 print("警告：获取的内容为空")
-                self.notices = []  # 清空公告列表，让调用者处理
+                self.notices = []
                 return
-            
-            print(f"尝试解析JSON格式公告数据，内容长度: {len(content)} 字节")
-            
-            # 解析JSON格式
-            try:
-                notices_data = json.loads(content)
-                if isinstance(notices_data, list):
-                    # 标准格式：[{"text": "...", "color": "...", "html": "..."}, ...]
-                    self.notices = notices_data[:self.max_notices]  # 限制公告数量
-                    print(f"成功解析JSON公告数据: {len(self.notices)} 条公告")
-                else:
-                    # 如果不是列表格式，创建单个公告项
-                    print("JSON数据不是列表格式，处理为单条公告")
-                    self.notices = [{"text": notices_data.get("text", self.default_notice), 
-                                  "color": notices_data.get("color", "#FFA500"),
-                                  "html": notices_data.get("html", "")}]
-            except json.JSONDecodeError as e:
-                error_line = int(str(e).split("line", 1)[1].split()[0]) if "line" in str(e) else "未知"
-                error_pos = int(str(e).split("column", 1)[1].split()[0]) if "column" in str(e) else "未知"
-                print(f"JSON解析错误: {e}，在行 {error_line} 列 {error_pos}")
-                
-                # 显示出错附近的内容
-                lines = content.split("\n")
-                if 0 <= error_line - 1 < len(lines):
-                    error_context = lines[error_line - 1]
-                    if isinstance(error_pos, int) and error_pos < len(error_context):
-                        print(f"错误附近内容: ...{error_context[max(0, error_pos-20):error_pos]}[HERE]{error_context[error_pos:error_pos+20]}...")
-                # JSON 失败时，尝试按“纯文本/Markdown”解析，降低编辑复杂度
-                print("回退：尝试按纯文本/Markdown 风格解析公告...")
-                self.notices = self._parse_plain_or_markdown_notices(content)
-                if self.notices:
-                    print(f"纯文本/Markdown 公告解析成功: {len(self.notices)} 条")
-                else:
-                    # 保持一致的异常路径，让外层按本地/默认回退
-                    raise
-                
+            print(f"按纯文本/Markdown解析公告，长度: {len(content)} 字节")
+            self.notices = self._parse_plain_or_markdown_notices(content)
         except Exception as e:
-            error_msg = f"解析公告内容失败: {str(e)}"
-            print(error_msg)
-            import traceback
-            print(traceback.format_exc())  # 打印完整的异常堆栈
-            # 解析失败时清空公告列表，让调用方法处理
+            print(f"解析公告内容失败: {e}")
             self.notices = []
-        
-        # 只有当有公告时才显示，否则让调用者处理
+
         if self.notices:
+            print(f"解析公告成功: {len(self.notices)} 条")
             self.show_current_notice()
 
     def _parse_plain_or_markdown_notices(self, content):

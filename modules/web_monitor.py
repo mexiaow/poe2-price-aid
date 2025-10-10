@@ -112,13 +112,10 @@ class WebMonitorTab(QWidget):
         # 初始化UI
         self.init_ui()
         
-        # 启动倒计时定时器
+        # 倒计时定时器延后到首次刷新时再启动，避免启动期多余的定时任务
         self.web_countdown_timer = QTimer(self)
         self.web_countdown_timer.timeout.connect(self.update_web_countdown_display)
-        self.web_countdown_timer.start(1000)  # 每秒更新倒计时
-        
-        # 启动网站监控线程
-        self.refresh_websites()
+        # 首次进入帖子监控标签页时，再触发 refresh_websites() 与启动倒计时
     
     def init_ui(self):
         """初始化UI"""
@@ -322,6 +319,10 @@ class WebMonitorTab(QWidget):
         self.web_monitor_thread.content_updated.connect(self.update_website_info)
         self.web_monitor_thread.finished.connect(self.on_web_monitor_finished)
         self.web_monitor_thread.start()
+
+        # 确保倒计时定时器已启动
+        if not self.web_countdown_timer.isActive():
+            self.web_countdown_timer.start(1000)
     
     def update_web_countdown_display(self):
         """更新倒计时显示"""

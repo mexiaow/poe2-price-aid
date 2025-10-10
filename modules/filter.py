@@ -50,13 +50,9 @@ class FilterTab(QWidget):
         # 自动检测游戏路径
         self.detect_game_path()
         
-        # 获取过滤器更新时间
-        self.get_filter_update_time()
-        
-        # 设置定时器自动检查更新
+        # 延迟首轮获取与定时器启动由主窗口统一调度（避免启动时并发网络请求）
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.auto_check_update)
-        self.update_timer.start(self.update_check_interval * 1000)  # 毫秒为单位
     
     def auto_check_update(self):
         """自动检查更新"""

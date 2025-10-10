@@ -875,8 +875,8 @@ class APatchTab(QWidget):
         self.init_ui()  # 初始化界面
         self.detect_game_path()  # 自动检测游戏路径
         
-        # 初始检查更新（获取补丁状态和更新时间）
-        self.check_updates()
+        # 初始不拉取，等待首次打开标签页时再检查，降低启动时的网络负担
+        # self.check_updates()
         
         # 确保需要的库已安装
         self.ensure_required_libs()
@@ -884,7 +884,8 @@ class APatchTab(QWidget):
         # 设置定时器，定期检查更新（包括补丁状态和更新时间）
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.check_updates)
-        self.update_timer.start(1800000)  # 30分钟 = 1800000毫秒
+        # 延后到首次打开标签页后再启动：在 ui_core.on_tab_changed 中调用 start
+        # self.update_timer.start(1800000)  # 30分钟 = 1800000毫秒
     
     def check_updates(self, force_refresh=False):
         """检查补丁更新状态和最后更新时间（合并函数）

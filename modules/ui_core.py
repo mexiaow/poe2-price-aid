@@ -118,8 +118,13 @@ class MainWindow(QMainWindow):
         # 显示正在加载公告状态
         self.update_notice_label("正在加载公告...", "#FFA500")
         
-        # 在事件循环启动后再启动公告管理器，避免阻塞首帧绘制
-        QTimer.singleShot(0, self.notice_manager.start)
+        # 在事件循环启动后再启动公告管理器，延后2秒，进一步降低启动时网络负担
+        QTimer.singleShot(3500, self.notice_manager.start)
+        
+        # 启动后统一延迟3秒拉取（与公告2秒错开）；若用户已提前进入对应标签页，会被幂等标记跳过
+        QTimer.singleShot(4000, self._schedule_web_monitor_initial)
+        QTimer.singleShot(3000, self._schedule_apatch_initial)
+        QTimer.singleShot(3000, self._schedule_filter_initial)
         
         # 如果隐藏功能已启用，在UI初始化后激活隐藏功能
         if Config.HIDDEN_FEATURES["enabled"]:
@@ -579,10 +584,50 @@ class MainWindow(QMainWindow):
         
         # 连接双击事件
         self.tab_widget.tabBarDoubleClicked.connect(self.on_tab_double_clicked)
-        
+
+        # 首次进入懒加载：网站监控 / A大补丁（补丁状态）
+        try:
+            self._web_first_loaded = False
+            self._apatch_first_loaded = False
+            self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        except Exception:
+            pass
+
+        # 将选项卡加入主布局
         parent_layout.addWidget(self.tab_widget)
-        
         return self.tab_widget
+
+    def on_tab_changed(self, index):
+        """首次打开对应标签时再触发数据拉取，降低启动时的网络开销"""
+        try:
+            # 价格监控保留现状，不在此处控制
+            # 帖子监控：首次进入时刷新
+            if index == 1 and hasattr(self, 'web_monitor_tab'):
+                if not getattr(self, '_web_first_loaded', False):
+                    self._web_first_loaded = True
+                    try:
+                        if hasattr(self.web_monitor_tab, 'show_refreshing_status'):
+                            self.web_monitor_tab.show_refreshing_status()
+                        if hasattr(self.web_monitor_tab, 'refresh_websites'):
+                            self.web_monitor_tab.refresh_websites()
+                    except Exception:
+                        pass
+
+            # A大补丁：首次进入时检查状态，并启动其内部的定时器
+            if index == 2 and hasattr(self, 'apatch_tab') and self.apatch_tab:
+                if not getattr(self, '_apatch_first_loaded', False):
+                    self._apatch_first_loaded = True
+                    try:
+                        # 触发一次检查
+                        if hasattr(self.apatch_tab, 'check_updates'):
+                            self.apatch_tab.check_updates()
+                        # 启动其周期性定时器（30分钟）
+                        if hasattr(self.apatch_tab, 'update_timer'):
+                            self.apatch_tab.update_timer.start(30 * 60 * 1000)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def _build_placeholder_tab(self, message: str) -> QWidget:
         """构建占位标签页（用于不支持的平台）"""
@@ -596,6 +641,46 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
         layout.addStretch(1)
         return w
+    
+    def _schedule_web_monitor_initial(self):
+        """启动后延时触发帖子监控首轮刷新（与其他任务错峰）。"""
+        try:
+            if hasattr(self, 'web_monitor_tab') and self.web_monitor_tab:
+                if not getattr(self, '_web_first_loaded', False):
+                    self._web_first_loaded = True
+                    if hasattr(self.web_monitor_tab, 'show_refreshing_status'):
+                        self.web_monitor_tab.show_refreshing_status()
+                    if hasattr(self.web_monitor_tab, 'refresh_websites'):
+                        self.web_monitor_tab.refresh_websites()
+        except Exception:
+            pass
+
+    def _schedule_apatch_initial(self):
+        """启动后延时触发A大补丁首轮检查（与其他任务错峰）。"""
+        try:
+            if hasattr(self, 'apatch_tab') and self.apatch_tab:
+                if not getattr(self, '_apatch_first_loaded', False):
+                    self._apatch_first_loaded = True
+                    if hasattr(self.apatch_tab, 'check_updates'):
+                        self.apatch_tab.check_updates()
+                    if hasattr(self.apatch_tab, 'update_timer'):
+                        # 确保定时器启动（30分钟）
+                        self.apatch_tab.update_timer.start(30 * 60 * 1000)
+        except Exception:
+            pass
+
+    def _schedule_filter_initial(self):
+        """启动后延时触发过滤器首轮检查（与其他任务错峰）。"""
+        try:
+            if hasattr(self, 'filter_tab') and self.filter_tab:
+                if not getattr(self, '_filter_first_loaded', False):
+                    self._filter_first_loaded = True
+                    if hasattr(self.filter_tab, 'get_filter_update_time'):
+                        self.filter_tab.get_filter_update_time()
+                    if hasattr(self.filter_tab, 'update_timer') and hasattr(self.filter_tab, 'update_check_interval'):
+                        self.filter_tab.update_timer.start(self.filter_tab.update_check_interval * 1000)
+        except Exception:
+            pass
     
     def on_tab_double_clicked(self, index):
         """处理选项卡双击事件"""

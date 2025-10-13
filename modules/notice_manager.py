@@ -119,6 +119,14 @@ class NoticeManager(QObject):
         self.showing_status = False
         self._fetching = False
         self._fetch_thread = None
+
+    def _ensure_rotation_started(self):
+        """在公告可用时启动轮播计时器（若未启动）。"""
+        try:
+            if self.notices and not self.rotation_timer.isActive():
+                self.rotation_timer.start(self.rotation_interval)
+        except Exception:
+            pass
     
     def start(self):
         """启动公告管理器"""
@@ -327,6 +335,9 @@ class NoticeManager(QObject):
                 if not title_line:
                     # 没有标题的块跳过
                     continue
+                # 首行以注释开头则整块忽略
+                if re.match(r"^(//|#)", title_line):
+                    continue
 
                 title, color = extract_color_from_title(title_line)
 
@@ -335,6 +346,9 @@ class NoticeManager(QObject):
                 body_lines = lines[first_idx + 1:] if first_idx is not None else []
                 escaped_lines = []
                 for ln in body_lines:
+                    # 跳过正文中的注释行
+                    if ln.strip().startswith('#') or ln.strip().startswith('//'):
+                        continue
                     ln_esc = escape_html(ln)
                     ln_esc = url_pattern.sub(r'<a href="\1" target="_blank">\1</a>', ln_esc)
                     escaped_lines.append(ln_esc)
@@ -387,6 +401,9 @@ class NoticeManager(QObject):
         
         # 更新原始公告
         self.original_notice = notice["text"]
+        
+        # 确保轮播定时器已启动
+        self._ensure_rotation_started()
     
     def pause_rotation(self):
         """暂停轮播"""

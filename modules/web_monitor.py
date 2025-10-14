@@ -48,7 +48,7 @@ class WebMonitor(QThread):
                     self.content_updated.emit(site_id, title, update_time)
                 
                 # 添加较长的延迟，避免被反爬机制拦截
-                self.msleep(3000)  # 每个请求间隔3秒
+                self.msleep(1500)  # 每个请求间隔3秒
             except Exception as e:
                 print(f"获取网站信息时出错 ({site_id}): {e}")
     

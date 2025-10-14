@@ -18,7 +18,7 @@ VERSION_FILE = 'version.txt'  # 存储版本号的文件
 WEBDAV_CONFIGS = [
     {
         'name': '主服务器',
-        'url': 'https://poe2.1232323.xyz/dav/release',
+        'url': 'http://104.194.71.26:5244/dav/release',
         'username': 'POE2PriceAid',
         'password': 'POE2PriceAid',
         'download_url_base': 'https://poe2.1232323.xyz/d/POE2PriceAid/release/',

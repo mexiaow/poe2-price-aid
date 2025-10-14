@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 import time
 from PyQt5.QtWidgets import (QMessageBox, QProgressDialog, QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton)
-from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal, QThread
 
 try:
     import requests
@@ -127,6 +127,167 @@ class UpdateChecker(QObject):
         
         # 进度对话框
         self.progress_dialog = None
+        # 后台检查线程引用，避免被回收
+        self._auto_check_thread = None
+        self._manual_check_thread = None
+        self._manual_check_canceled = False
+
+    # =============== 后台检查更新（自动） ===============
+    def check_for_updates_async(self):
+        """静默检查更新（后台线程执行请求），仅在有新版本时显示提示"""
+        if self.is_updating:
+            return
+
+        class UpdateCheckThread(QThread):
+            success = pyqtSignal(str, str)  # latest_version, download_url
+            failed = pyqtSignal(str)
+            def __init__(self, url):
+                super().__init__()
+                self.url = url
+            def run(self):
+                try:
+                    import requests  # 在工作线程内导入，避免主线程阻塞
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    resp = requests.get(self.url, headers=headers, timeout=5, verify=True)
+                    info = json.loads(resp.text)
+                    latest = info.get("version")
+                    url = info.get("download_url")
+                    if latest and url:
+                        self.success.emit(latest, url)
+                    else:
+                        self.failed.emit("更新信息不完整")
+                except Exception as e:
+                    self.failed.emit(str(e))
+
+        t = UpdateCheckThread(self.update_url)
+        self._auto_check_thread = t
+
+        def _on_success(latest_version, download_url):
+            try:
+                cmp = self.compare_versions(latest_version, self.current_version)
+                if cmp > 0:
+                    countdown_dialog = CountdownUpdateDialog(
+                        parent=self.parent,
+                        latest_version=latest_version,
+                        current_version=self.current_version,
+                        countdown_seconds=5
+                    )
+                    countdown_dialog.exec_()
+                    if countdown_dialog.get_result():
+                        self.download_and_replace(download_url)
+                    else:
+                        self.update_not_available.emit()
+                else:
+                    self.update_not_available.emit()
+            except Exception as e:
+                self.update_error.emit(str(e))
+
+        def _on_failed(msg):
+            # 静默记录并通知错误，让后续流程继续
+            print(f"自动检查更新失败: {msg}")
+            self.update_error.emit(str(msg))
+
+        def _on_finished():
+            self._auto_check_thread = None
+
+        t.success.connect(_on_success)
+        t.failed.connect(_on_failed)
+        t.finished.connect(_on_finished)
+        t.start()
+
+    # =============== 后台检查更新（手动） ===============
+    def check_updates_manually_async(self):
+        """手动检查更新（后台线程请求），显示所有结果，可取消"""
+        if self.is_updating:
+            QMessageBox.information(self.parent, "正在更新", "更新已在进行中，请稍候...", QMessageBox.Ok)
+            return
+
+        status_dialog = QMessageBox(self.parent)
+        status_dialog.setWindowTitle("检查更新")
+        status_dialog.setText("正在检查更新，请稍候...")
+        status_dialog.setStandardButtons(QMessageBox.Cancel)
+        status_dialog.setIcon(QMessageBox.Information)
+
+        self._manual_check_canceled = False
+
+        class UpdateCheckThread(QThread):
+            success = pyqtSignal(str, str)
+            failed = pyqtSignal(str)
+            def __init__(self, url):
+                super().__init__()
+                self.url = url
+            def run(self):
+                try:
+                    import requests
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    resp = requests.get(self.url, headers=headers, timeout=5)
+                    info = json.loads(resp.text)
+                    latest = info.get("version")
+                    url = info.get("download_url")
+                    if latest and url:
+                        self.success.emit(latest, url)
+                    else:
+                        self.failed.emit("更新信息不完整")
+                except Exception as e:
+                    self.failed.emit(str(e))
+
+        t = UpdateCheckThread(self.update_url)
+        self._manual_check_thread = t
+
+        def _close_dialog():
+            try:
+                status_dialog.done(0)
+            except Exception:
+                pass
+
+        def _on_success(latest_version, download_url):
+            _close_dialog()
+            if self._manual_check_canceled:
+                return
+            try:
+                cmp = self.compare_versions(latest_version, self.current_version)
+                if cmp > 0:
+                    countdown_dialog = CountdownUpdateDialog(
+                        parent=self.parent,
+                        latest_version=latest_version,
+                        current_version=self.current_version,
+                        countdown_seconds=5
+                    )
+                    countdown_dialog.exec_()
+                    if countdown_dialog.get_result():
+                        self.download_and_replace(download_url)
+                    else:
+                        self.update_not_available.emit()
+                else:
+                    QMessageBox.information(self.parent, "检查更新", "当前已是最新版本。", QMessageBox.Ok)
+                    self.update_not_available.emit()
+            except Exception as e:
+                QMessageBox.critical(self.parent, "检查更新", f"检查更新时出错: {e}", QMessageBox.Ok)
+                self.update_error.emit(str(e))
+
+        def _on_failed(msg):
+            _close_dialog()
+            if self._manual_check_canceled:
+                return
+            QMessageBox.warning(self.parent, "检查更新", f"检查更新失败：{msg}", QMessageBox.Ok)
+            self.update_error.emit(str(msg))
+
+        def _on_finished():
+            self._manual_check_thread = None
+
+        t.success.connect(_on_success)
+        t.failed.connect(_on_failed)
+        t.finished.connect(_on_finished)
+        t.start()
+
+        result = status_dialog.exec_()
+        if result == QMessageBox.Cancel:
+            self._manual_check_canceled = True
+            return
     
     def start_auto_check(self, delay_ms=3000):
         """启动延迟自动检查 (仅用于程序启动时的一次性检测，非周期性定时检测)

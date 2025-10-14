@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         # 初始化UI
         self.init_ui()
         
-        # 启动延迟自动检查更新（3秒后执行）- 程序仅在启动时检测一次，不会周期性检测
-        QTimer.singleShot(3000, self.update_checker.check_for_updates)
+        # 启动延迟自动检查更新（3秒后执行，后台线程）- 程序仅在启动时检测一次，不会周期性检测
+        QTimer.singleShot(3000, self.update_checker.check_for_updates_async)
         
         # 心跳客户端功能已移除
         
@@ -509,7 +509,8 @@ class MainWindow(QMainWindow):
                 background-color: #005A9E;
             }
         """)
-        check_update_button.clicked.connect(self.update_checker.check_updates_manually)
+        # 手动检查更新改为后台线程流程
+        check_update_button.clicked.connect(self.update_checker.check_updates_manually_async)
         buttons_layout.addWidget(check_update_button)
         
         # 将按钮组添加到标题栏
@@ -729,14 +730,19 @@ class MainWindow(QMainWindow):
         
         # 如果是A大补丁标签页
         elif index == 2:
-            # 显示刷新状态信息
-            self.notice_manager.show_status("正在重新检测游戏路径...")
-            
-            # 调用A大补丁标签页的检测游戏路径方法
-            if hasattr(self.apatch_tab, 'detect_game_path'):
-                self.apatch_tab.detect_game_path()
-            else:
-                self.notice_manager.show_status("刷新功能未实现")
+            # 双击改为：刷新“最后更新时间”
+            self.notice_manager.show_status("正在刷新A大补丁最后更新时间...")
+
+            # 优先使用提供的刷新更新时间方法；没有则回退到 check_updates(force_refresh=True)
+            try:
+                if hasattr(self.apatch_tab, 'get_apatch_update_time'):
+                    self.apatch_tab.get_apatch_update_time()
+                elif hasattr(self.apatch_tab, 'check_updates'):
+                    self.apatch_tab.check_updates(force_refresh=True)
+                else:
+                    self.notice_manager.show_status("刷新功能未实现")
+            except Exception:
+                self.notice_manager.show_status("刷新失败，请稍后重试")
 
         # 如果是过滤器标签页
         elif index == 3 and hasattr(self, 'filter_tab') and self.filter_tab:

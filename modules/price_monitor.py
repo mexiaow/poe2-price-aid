@@ -5,6 +5,8 @@
 
 import re
 import requests
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -29,22 +31,45 @@ class PriceScraper(QThread):
         }
         
     def run(self):
-        for currency, url in self.urls.items():
-            try:
-                price = self.get_price(url)
-                if price > 0:  # 只有当价格有效时才发送信号
-                    self.price_updated.emit(currency, price)
-                    # 添加短暂延迟，避免请求过快
-                    self.msleep(10)
-            except Exception as e:
-                pass
+        """并发抓取价格（最多4并发），并加入轻微错峰延迟"""
+        try:
+            with requests.Session() as session:
+                # 受控并发为4；为每个请求增加微小错峰（0/50/100/150ms），降低瞬时并发尖峰
+                items = list(self.urls.items())
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {}
+                    for i, (currency, url) in enumerate(items):
+                        delay_ms = i * 50  # 每个请求递增 50ms 的轻微延迟
+                        futures[executor.submit(self._get_price_with_delay, url, session, delay_ms)] = currency
+                    for future in as_completed(futures):
+                        currency = futures.get(future)
+                        try:
+                            price = future.result()
+                        except Exception:
+                            continue
+                        if price > 0:
+                            self.price_updated.emit(currency, price)
+                        # 轻微让步，避免过于频繁地触发UI更新
+                        self.msleep(10)
+        except Exception:
+            pass
+
+    def _get_price_with_delay(self, url, session, delay_ms=0):
+        """在请求前增加轻微延迟以错峰，单位毫秒"""
+        try:
+            if delay_ms and delay_ms > 0:
+                time.sleep(delay_ms / 1000.0)
+        except Exception:
+            pass
+        return self.get_price(url, session)
     
-    def get_price(self, url):
+    def get_price(self, url, session=None):
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            response = requests.get(url, headers=headers)
+            client = session or requests
+            response = client.get(url, headers=headers, timeout=8)
             soup = BeautifulSoup(response.text, 'html.parser')
             
             # 首先尝试用户提供的CSS选择器（第二个商品）

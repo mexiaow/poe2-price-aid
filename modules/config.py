@@ -14,7 +14,7 @@ class Config:
     """配置管理类"""
     
     # 程序版本
-    CURRENT_VERSION = "3.0.23"
+    CURRENT_VERSION = "3.0.24"
     
     # 默认窗口大小
     DEFAULT_WINDOW_SIZE = (930, 350)

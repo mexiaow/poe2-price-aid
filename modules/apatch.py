@@ -229,41 +229,42 @@ class APatchInstallThread(QThread):
             self.install_finished.emit(False, f"安装过程出错: {str(e)}")
     
     def backup_original_files(self):
-        """备份原始文件到backup_apatch_1和backup_apatch_2文件夹"""
+        """备份原始文件到“@A大补丁还原@/backup_YYYYMMDD_HHMMSS”，并保留最近3次历史"""
         try:
             import shutil
+            from datetime import datetime
 
-            # 指定要备份的文件和目录（Bundles2目录中的文件和目录结构）
+            # 指定要备份的文件和目录（Bundles2 目录中的文件和目录结构）
             items_to_backup = [
                 "_.index.bin",
                 "Tiny.V0.1.bundle.bin",
-                "LibGGPK3"  # 整个LibGGPK3目录
+                "LibGGPK3"  # 整个 LibGGPK3 目录
             ]
 
-            # 源文件目录（Bundles2文件夹）
+            # 源文件目录（Bundles2 文件夹）
             bundles2_path = os.path.join(self.game_path, "Bundles2")
             if not os.path.exists(bundles2_path):
                 self.add_log(f"Bundles2目录不存在: {bundles2_path}")
                 return False
 
-            # 创建备份目录名
-            backup_dir_1 = os.path.join(self.game_path, "backup_apatch_1")
-            backup_dir_2 = os.path.join(self.game_path, "backup_apatch_2")
+            # 备份根目录：<game_path>/@A大补丁还原@
+            backup_root = os.path.join(self.game_path, "@A大补丁还原@")
+            os.makedirs(backup_root, exist_ok=True)
 
-            # 如果backup_apatch_1已存在，先将其移动到backup_apatch_2
-            if os.path.exists(backup_dir_1):
-                # 如果backup_apatch_2也存在，先删除它
-                if os.path.exists(backup_dir_2):
-                    shutil.rmtree(backup_dir_2, ignore_errors=True)
-                    self.add_log(f"已删除旧的备份目录: {backup_dir_2}")
+            # 在备份根目录写入固定说明文件：还原方法.txt
+            try:
+                restore_tip_path = os.path.join(backup_root, "还原方法.txt")
+                with open(restore_tip_path, "w", encoding="utf-8") as f:
+                    f.write("选择你需要还原的备份文件夹'backup_YYYYMMDD_HHMMSS',将备份文件夹内所有文件覆盖到游戏目录Bundles2文件夹下")
+            except Exception as e:
+                # 写入失败不影响备份流程
+                self.add_log(f"写入还原方法说明失败: {e}")
 
-                # 将backup_apatch_1移动到backup_apatch_2
-                os.rename(backup_dir_1, backup_dir_2)
-                self.add_log(f"已将 {backup_dir_1} 移动到 {backup_dir_2}")
-
-            # 创建新的backup_apatch_1目录
-            os.makedirs(backup_dir_1, exist_ok=True)
-            self.add_log(f"已创建新的备份目录: {backup_dir_1}")
+            # 时间戳目录：backup_YYYYMMDD_HHMMSS
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = os.path.join(backup_root, f"backup_{timestamp}")
+            os.makedirs(backup_dir, exist_ok=True)
+            self.add_log(f"已创建新的备份目录: {backup_dir}")
 
             # 备份指定的文件和目录
             backup_success_count = 0
@@ -271,7 +272,7 @@ class APatchInstallThread(QThread):
                 source_path = os.path.join(bundles2_path, item_path)
 
                 if os.path.exists(source_path):
-                    destination_path = os.path.join(backup_dir_1, item_path)
+                    destination_path = os.path.join(backup_dir, item_path)
                     try:
                         if os.path.isfile(source_path):
                             # 备份文件
@@ -288,6 +289,35 @@ class APatchInstallThread(QThread):
                         self.add_log(f"备份失败 {item_path}: {e}")
                 else:
                     self.add_log(f"源文件/目录不存在，跳过备份: {item_path}")
+
+            # 清理只保留最近3次历史备份
+            try:
+                entries = []
+                for name in os.listdir(backup_root):
+                    path = os.path.join(backup_root, name)
+                    if os.path.isdir(path) and name.startswith("backup_"):
+                        try:
+                            mtime = os.path.getmtime(path)
+                        except Exception:
+                            mtime = 0
+                        entries.append((name, path, mtime))
+
+                # 按修改时间从新到旧排序
+                entries.sort(key=lambda x: x[2], reverse=True)
+
+                # 多于3个则删除多余的旧备份
+                if len(entries) > 3:
+                    to_delete = entries[3:]
+                    for name, path, _ in to_delete:
+                        try:
+                            shutil.rmtree(path, ignore_errors=True)
+                            self.add_log(f"已删除过期备份: {path}")
+                        except Exception as e:
+                            self.add_log(f"删除过期备份失败 {path}: {e}")
+                self.add_log("历史备份保留：最近3次")
+            except Exception as e:
+                # 清理失败不影响备份结果，但记录日志
+                self.add_log(f"清理历史备份时出错: {e}")
 
             # 备份成功（即使某些文件不存在也算成功，因为首次安装时可能没有这些文件）
             self.add_log(f"备份完成，成功备份了 {backup_success_count} 个项目")

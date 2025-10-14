@@ -417,32 +417,43 @@ class UpdateChecker(QObject):
 setlocal ENABLEDELAYEDEXPANSION
 chcp 936 > nul
 
-rem 等待原程序完全退出（最多60秒）
-powershell -NoProfile -Command "try {{ Wait-Process -Id {current_pid} -Timeout 60 }} catch {{}}" >nul 2>nul
+echo 正在更新 POE2PriceAid 到: {new_exe_name}
+echo [1/4] 等待原程序退出...
+powershell -NoProfile -Command "try {{ Wait-Process -Id {current_pid} -Timeout 60 }} catch {{}}"
 
-rem 先将下载的新文件改名为最终版本名，避免遗留 *_new.exe
-move /y "{temp_file}" "{exe_dir}\\{new_exe_name}" >nul 2>nul
+echo [2/4] 应用更新：重命名新文件为最终版本名
+move /y "{temp_file}" "{exe_dir}\\{new_exe_name}"
 if errorlevel 1 (
-  rem 改名失败则直接退出
+  echo 重命名新文件失败，更新已中止。
   exit /b 1
 )
 
-rem 删除旧版本，失败则最多重试2次，指数退避（1s, 2s）
+echo [3/4] 清理旧版本
 set RETRY=0
 set WAIT=1
-:DELTRY
-del /f /q "{current_exe}" >nul 2>nul
 if exist "{current_exe}" (
-  if !RETRY! LSS 2 (
-    set /a RETRY+=1
-    timeout /t !WAIT! /nobreak > nul
-    set /a WAIT=WAIT*2
-    goto DELTRY
+  :DELTRY
+  del /f /q "{current_exe}"
+  if exist "{current_exe}" (
+    if !RETRY! LSS 2 (
+      set /a RETRY+=1
+      echo 第 !RETRY! 次删除失败，等待 !WAIT! 秒后重试...
+      timeout /t !WAIT! /nobreak
+      set /a WAIT=WAIT*2
+      goto DELTRY
+    ) else (
+      echo 旧版本仍被占用，将保留旧文件，继续启动新版本。
+    )
+  ) else (
+    echo 旧版本已删除或不存在。
   )
+) else (
+  echo 未检测到旧版本或已删除。
 )
 
-rem 启动新版本
+echo [4/4] 启动新版本...
 start "" "{exe_dir}\\{new_exe_name}"
+echo 更新完成，窗口即将关闭。
 
 rem 自删除
 ping 127.0.0.1 -n 2 > nul

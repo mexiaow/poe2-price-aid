@@ -124,7 +124,7 @@ class PriceMonitorTab(QWidget):
         self.currency_colors = Config.CURRENCY_COLORS
         self.currency_names = Config.CURRENCY_NAMES
         self.start_time = datetime.now()
-        self.countdown_seconds = 300  # 5分钟刷新一次
+        self.countdown_seconds = 600  # 10分钟刷新一次
         
         # 初始化UI
         self.init_ui()
@@ -299,7 +299,7 @@ class PriceMonitorTab(QWidget):
         bottom_layout = QHBoxLayout()
         
         # 添加说明文本
-        price_note = QLabel("说明: 价格数据来自平台，每5分钟自动更新一次。")
+        price_note = QLabel("说明: 价格数据来自平台，每10分钟自动更新一次。")
         price_note.setStyleSheet("color: #888888; margin-top: 10px; font-size: 16px;")  # 增加字体大小
         bottom_layout.addWidget(price_note)
         
@@ -307,7 +307,7 @@ class PriceMonitorTab(QWidget):
         bottom_layout.addStretch(1)
         
         # 添加倒计时标签
-        self.countdown_label = QLabel("下次刷新: 05:00")
+        self.countdown_label = QLabel("下次刷新: 10:00")
         self.countdown_label.setStyleSheet("color: #888888; margin-top: 10px; font-size: 14px;")
         bottom_layout.addWidget(self.countdown_label)
         
@@ -366,7 +366,7 @@ class PriceMonitorTab(QWidget):
             
             # 重置倒计时
             self.start_time = datetime.now()
-            self.countdown_seconds = 300  # 5分钟
+            self.countdown_seconds = 600  # 10分钟
             
             # 更新倒计时显示
             self.update_countdown_display()

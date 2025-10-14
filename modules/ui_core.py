@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
         # 帖子监控默认延迟启动：由2秒改为30秒；若用户手动切换到帖子监控标签，则会立即启动
         QTimer.singleShot(30000, self._schedule_web_monitor_initial)
         QTimer.singleShot(1000, self._schedule_apatch_initial)
-        QTimer.singleShot(1000, self._schedule_filter_initial)
+        QTimer.singleShot(10000, self._schedule_filter_initial)
         
         # 如果隐藏功能已启用，在UI初始化后激活隐藏功能
         if Config.HIDDEN_FEATURES["enabled"]:
@@ -603,6 +603,8 @@ class MainWindow(QMainWindow):
         try:
             self._web_first_loaded = False
             self._apatch_first_loaded = False
+            # 过滤器安装：增加首次加载标记，便于手动点击标签时立即加载并避免与定时器重复
+            self._filter_first_loaded = False
             self.tab_widget.currentChanged.connect(self.on_tab_changed)
         except Exception:
             pass
@@ -737,15 +739,19 @@ class MainWindow(QMainWindow):
                 self.notice_manager.show_status("刷新功能未实现")
 
         # 如果是过滤器标签页
-        elif index == 3:
-            # 显示刷新状态信息
-            self.notice_manager.show_status("正在获取过滤器更新信息...")
-            
-            # 调用过滤器标签页的获取更新时间方法
-            if hasattr(self.filter_tab, 'get_filter_update_time'):
-                self.filter_tab.get_filter_update_time()
-            else:
-                self.notice_manager.show_status("刷新功能未实现")
+        elif index == 3 and hasattr(self, 'filter_tab') and self.filter_tab:
+            # 手动点击应当立即进行首次加载；并设置首载标记，避免与10秒定时器重复触发
+            if not getattr(self, '_filter_first_loaded', False):
+                self._filter_first_loaded = True
+                # 显示刷新状态信息
+                self.notice_manager.show_status("正在获取过滤器更新信息...")
+                try:
+                    if hasattr(self.filter_tab, 'get_filter_update_time'):
+                        self.filter_tab.get_filter_update_time()
+                    if hasattr(self.filter_tab, 'update_timer') and hasattr(self.filter_tab, 'update_check_interval'):
+                        self.filter_tab.update_timer.start(self.filter_tab.update_check_interval * 1000)
+                except Exception:
+                    pass
                 
         # 如果是自动喝药标签页
         elif index == 4:

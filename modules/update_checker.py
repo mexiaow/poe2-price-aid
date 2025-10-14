@@ -419,7 +419,7 @@ chcp 936 > nul
 
 echo 正在更新 POE2PriceAid 到: {new_exe_name}
 echo [1/4] 等待原程序退出...
-powershell -NoProfile -Command "try {{ Wait-Process -Id {current_pid} -Timeout 60 }} catch {{}}"
+powershell -NoProfile -Command "try {{ Wait-Process -Id {current_pid} -Timeout 20 -ErrorAction SilentlyContinue }} catch {{}}" >nul 2>nul
 
 echo [2/4] 应用更新：重命名新文件为最终版本名
 move /y "{temp_file}" "{exe_dir}\\{new_exe_name}"
@@ -428,27 +428,29 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [3/4] 清理旧版本
+echo [3/4] 清理旧版本（最多重试 2 次：1s、2s）
 set RETRY=0
 set WAIT=1
 if exist "{current_exe}" (
   :DELTRY
-  del /f /q "{current_exe}"
+  del /f /q "{current_exe}" >nul 2>nul
   if exist "{current_exe}" (
     if !RETRY! LSS 2 (
       set /a RETRY+=1
       echo 第 !RETRY! 次删除失败，等待 !WAIT! 秒后重试...
-      timeout /t !WAIT! /nobreak
+      timeout /t !WAIT! /nobreak > nul
       set /a WAIT=WAIT*2
       goto DELTRY
-    ) else (
-      echo 旧版本仍被占用，将保留旧文件，继续启动新版本。
     )
+  )
+  rem 根据最终状态给出单条提示
+  if exist "{current_exe}" (
+    echo 旧版本仍被占用，将保留旧文件，继续启动新版本。
   ) else (
-    echo 旧版本已删除或不存在。
+    echo 旧版本已删除。
   )
 ) else (
-  echo 未检测到旧版本或已删除。
+  echo 未检测到旧版本。
 )
 
 echo [4/4] 启动新版本...

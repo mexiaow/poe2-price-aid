@@ -110,21 +110,35 @@ class MainWindow(QMainWindow):
         # 初始化UI
         self.init_ui()
         
-        # 启动延迟自动检查更新（5秒后执行）- 程序仅在启动时检测一次，不会周期性检测
-        QTimer.singleShot(5000, self.update_checker.check_for_updates)
+        # 启动延迟自动检查更新（2秒后执行）- 程序仅在启动时检测一次，不会周期性检测
+        QTimer.singleShot(2000, self.update_checker.check_for_updates)
         
         # 心跳客户端功能已移除
         
-        # 显示正在加载公告状态
+        # 显示正在加载公告状态（实际启动由更新检查结果驱动，避免与更新并发冲突）
         self.update_notice_label("正在加载公告...", "#FFA500")
-        
-        # 在事件循环启动后再启动公告管理器，延后2秒，进一步降低启动时网络负担
-        QTimer.singleShot(4000, self.notice_manager.start)
+
+        # 公告启动改为由更新检查结果驱动：
+        # - 无更新(update_not_available) 或 检查出错(update_error) 或 用户拒绝更新 → 立即启动公告
+        self._notice_started = False
+        def _start_notice_once():
+            if not self._notice_started:
+                self._notice_started = True
+                try:
+                    self.notice_manager.start()
+                except Exception:
+                    pass
+        try:
+            self.update_checker.update_not_available.connect(_start_notice_once)
+            self.update_checker.update_error.connect(lambda _msg: _start_notice_once())
+        except Exception:
+            pass
         
         # 启动后统一延迟3秒拉取（与公告2秒错开）；若用户已提前进入对应标签页，会被幂等标记跳过
-        QTimer.singleShot(4500, self._schedule_web_monitor_initial)
-        QTimer.singleShot(4000, self._schedule_apatch_initial)
-        QTimer.singleShot(4000, self._schedule_filter_initial)
+        # 帖子监控默认延迟启动：由2秒改为30秒；若用户手动切换到帖子监控标签，则会立即启动
+        QTimer.singleShot(30000, self._schedule_web_monitor_initial)
+        QTimer.singleShot(2000, self._schedule_apatch_initial)
+        QTimer.singleShot(2000, self._schedule_filter_initial)
         
         # 如果隐藏功能已启用，在UI初始化后激活隐藏功能
         if Config.HIDDEN_FEATURES["enabled"]:

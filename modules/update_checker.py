@@ -176,7 +176,12 @@ class UpdateChecker(QObject):
                 if countdown_dialog.get_result():
                     # 用户选择更新，下载并替换当前程序
                     self.download_and_replace(download_url)
-            # 如果是最新版本，不显示任何提示
+                else:
+                    # 用户拒绝更新，告知外部可继续进行启动后的其他任务（如公告）
+                    self.update_not_available.emit()
+            else:
+                # 如果是最新版本，发出“无更新”信号（自动检查保持静默，不弹框）
+                self.update_not_available.emit()
         
         except Exception as e:
             # 自动检查更新时出错，不显示提示，只记录日志
@@ -254,6 +259,9 @@ class UpdateChecker(QObject):
                 if countdown_dialog.get_result():
                     # 用户选择更新，下载并替换当前程序
                     self.download_and_replace(download_url)
+                else:
+                    # 用户拒绝更新，通知外部后续流程（如公告）
+                    self.update_not_available.emit()
             else:
                 # 已经是最新版本，显示提示
                 # 使用静音消息框

@@ -110,8 +110,8 @@ class MainWindow(QMainWindow):
         # 初始化UI
         self.init_ui()
         
-        # 启动延迟自动检查更新（2秒后执行）- 程序仅在启动时检测一次，不会周期性检测
-        QTimer.singleShot(2000, self.update_checker.check_for_updates)
+        # 启动延迟自动检查更新（3秒后执行）- 程序仅在启动时检测一次，不会周期性检测
+        QTimer.singleShot(3000, self.update_checker.check_for_updates)
         
         # 心跳客户端功能已移除
         
@@ -137,8 +137,8 @@ class MainWindow(QMainWindow):
         # 启动后统一延迟3秒拉取（与公告2秒错开）；若用户已提前进入对应标签页，会被幂等标记跳过
         # 帖子监控默认延迟启动：由2秒改为30秒；若用户手动切换到帖子监控标签，则会立即启动
         QTimer.singleShot(30000, self._schedule_web_monitor_initial)
-        QTimer.singleShot(2000, self._schedule_apatch_initial)
-        QTimer.singleShot(2000, self._schedule_filter_initial)
+        QTimer.singleShot(1000, self._schedule_apatch_initial)
+        QTimer.singleShot(1000, self._schedule_filter_initial)
         
         # 如果隐藏功能已启用，在UI初始化后激活隐藏功能
         if Config.HIDDEN_FEATURES["enabled"]:

@@ -41,3 +41,6 @@ webdav.json
 *.egg-info/
 *.egg
 版本备份工具.bat
+
+#serena
+.serena/

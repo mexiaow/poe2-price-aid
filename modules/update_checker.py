@@ -411,43 +411,43 @@ class UpdateChecker(QObject):
             
             # 创建更新批处理脚本
             updater_script = os.path.join(exe_dir, "update.bat")
+            current_pid = os.getpid()
             with open(updater_script, "w", encoding="gbk") as f:  # 使用GBK编码，适合中文Windows
                 f.write(f"""@echo off
+setlocal ENABLEDELAYEDEXPANSION
 chcp 936 > nul
-echo 正在更新POE2PriceAid...
-echo 请等待程序关闭...
 
-rem 等待原程序退出
-timeout /t 5 /nobreak > nul
+rem 等待原程序完全退出（最多60秒）
+powershell -NoProfile -Command "try {{ Wait-Process -Id {current_pid} -Timeout 60 }} catch {{}}" >nul 2>nul
 
-rem 替换文件 (使用强制删除)
-echo 正在替换文件...
-del /f /q "{current_exe}"
-if exist "{current_exe}" (
-  echo 无法删除原文件，请手动更新
-  echo 源文件: {temp_file}
-  echo 目标文件: {exe_dir}\\{new_exe_name}
-  pause
-  exit /b 1
-)
-
-rem 移动新文件到带版本号的文件名
-move /y "{temp_file}" "{exe_dir}\\{new_exe_name}"
+rem 先将下载的新文件改名为最终版本名，避免遗留 *_new.exe
+move /y "{temp_file}" "{exe_dir}\\{new_exe_name}" >nul 2>nul
 if errorlevel 1 (
-  echo 移动文件失败，请手动更新
-  pause
+  rem 改名失败则直接退出
   exit /b 1
 )
 
-echo 更新成功！正在启动新版本程序...
+rem 删除旧版本，失败则最多重试2次，指数退避（1s, 2s）
+set RETRY=0
+set WAIT=1
+:DELTRY
+del /f /q "{current_exe}" >nul 2>nul
+if exist "{current_exe}" (
+  if !RETRY! LSS 2 (
+    set /a RETRY+=1
+    timeout /t !WAIT! /nobreak > nul
+    set /a WAIT=WAIT*2
+    goto DELTRY
+  )
+)
 
-rem 启动新版本程序
+rem 启动新版本
 start "" "{exe_dir}\\{new_exe_name}"
 
-rem 延迟删除自身
+rem 自删除
 ping 127.0.0.1 -n 2 > nul
 del "%~f0"
-exit
+exit /b 0
 """)
             
             # 提示用户更新，使用新版本号

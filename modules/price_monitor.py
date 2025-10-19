@@ -6,6 +6,8 @@
 import re
 import requests
 import time
+import os
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -15,6 +17,29 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 
 from modules.config import Config
+
+
+# 调试开关：
+# - 推荐：在运行时添加参数 --debug-price 或 --debug 开启价格抓取调试输出（默认关闭）
+# - 兼容：也支持环境变量 POE2_DEBUG_PRICE=1 或 POE2_DEBUG=1 开启
+def _env_truth(v: str) -> bool:
+    return str(v).lower() in ("1", "true", "yes", "on")
+
+def _cli_flag_present(*flags: str) -> bool:
+    try:
+        return any(flag in sys.argv for flag in flags)
+    except Exception:
+        return False
+
+# 优先使用命令行参数开关；若未提供则回退到环境变量
+DEBUG_PRICE = _cli_flag_present("--debug-price", "--debug") or _env_truth(os.getenv("POE2_DEBUG_PRICE", os.getenv("POE2_DEBUG", "0")))
+
+def _dlog(msg: str):
+    if DEBUG_PRICE:
+        try:
+            print(f"[price_debug] {msg}")
+        except Exception:
+            pass
 
 
 class PriceScraper(QThread):
@@ -33,84 +58,78 @@ class PriceScraper(QThread):
     def run(self):
         """并发抓取价格（最多4并发），并加入轻微错峰延迟"""
         try:
-            with requests.Session() as session:
-                # 受控并发为4；为每个请求增加微小错峰（0/50/100/150ms），降低瞬时并发尖峰
-                items = list(self.urls.items())
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    futures = {}
-                    for i, (currency, url) in enumerate(items):
-                        delay_ms = i * 50  # 每个请求递增 50ms 的轻微延迟
-                        futures[executor.submit(self._get_price_with_delay, url, session, delay_ms)] = currency
-                    for future in as_completed(futures):
-                        currency = futures.get(future)
-                        try:
-                            price = future.result()
-                        except Exception:
-                            continue
-                        if price > 0:
-                            self.price_updated.emit(currency, price)
-                        # 轻微让步，避免过于频繁地触发UI更新
-                        self.msleep(10)
+            _dlog("start price refresh with 4 workers (0/50/100/150ms stagger)")
+            # 受控并发为4；为每个请求增加微小错峰（0/50/100/150ms），降低瞬时并发尖峰
+            items = list(self.urls.items())
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {}
+                for i, (currency, url) in enumerate(items):
+                    delay_ms = i * 50  # 每个请求递增 50ms 的轻微延迟
+                    # 注意：不共享 Session 到多线程，避免线程安全问题；每个任务各自请求
+                    futures[executor.submit(self._get_price_with_delay, url, delay_ms)] = currency
+                for future in as_completed(futures):
+                    currency = futures.get(future)
+                    try:
+                        price = future.result()
+                    except Exception:
+                        continue
+                    if price > 0:
+                        self.price_updated.emit(currency, price)
+                        _dlog(f"parsed {currency} => {price}")
+                    # 轻微让步，避免过于频繁地触发UI更新
+                    self.msleep(10)
         except Exception:
             pass
 
-    def _get_price_with_delay(self, url, session, delay_ms=0):
-        """在请求前增加轻微延迟以错峰，单位毫秒"""
+    def _get_price_with_delay(self, url, delay_ms=0):
+        """在请求前增加轻微延迟以错峰，单位毫秒；每个任务独立请求，避免共享会话"""
         try:
             if delay_ms and delay_ms > 0:
                 time.sleep(delay_ms / 1000.0)
         except Exception:
             pass
-        return self.get_price(url, session)
+        # 使用 requests.get（每次调用内部自建会话），是线程安全的
+        return self.get_price(url)
     
     def get_price(self, url, session=None):
+        """使用单一解析路径：获取第二个商品的价格；失败直接返回 0.000"""
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Referer': 'https://www.dd373.com/'
             }
             client = session or requests
             response = client.get(url, headers=headers, timeout=8)
+            # 纠正编码，避免解析失败
+            try:
+                enc = (response.encoding or '').lower()
+                if not enc or enc == 'iso-8859-1':
+                    response.encoding = getattr(response, 'apparent_encoding', None) or 'utf-8'
+            except Exception:
+                pass
+            _dlog(f"GET {url} status={getattr(response, 'status_code', 'NA')} len={len(getattr(response, 'text', '') or '')} enc={getattr(response, 'encoding', 'NA')}")
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 首先尝试用户提供的CSS选择器（第二个商品）
-            css_selector = "body > div.main > div.goods-list-content > div > div.sell-goods > div.good-list-box > div:nth-child(2) > div.width233.p-l30 > div:nth-child(2) > p.font12.color666.m-t5"
-            price_element = soup.select_one(css_selector)
-            
-            # 如果上面的选择器失败，尝试一个更简化的版本（第二个商品）
+
+            # 单一路径：第二个商品价格位置
+            price_element = soup.select_one('div.good-list-box div:nth-child(2) div.p-r66 p.font12.color666.m-t5')
             if not price_element:
-                price_element = soup.select_one('div.good-list-box div:nth-child(2) div.p-r66 p.font12.color666.m-t5')
-            
-            # 如果还是失败，尝试原始的选择器
-            if not price_element:
-                price_element = soup.select_one('p.font12.color666.m-t5')
-            
-            if not price_element:
-                price_element = soup.select_one('.good-list-box div:nth-child(2) .p-r66 p.font12')
-            
-            # 尝试精确匹配用户提供的XPath对应的元素
-            if not price_element:
-                price_element = soup.select_one('div.main div.goods-list-content div div.sell-goods div.good-list-box div:nth-child(2) div.width233.p-l30 div:nth-child(2) p.font12.color666.m-t5')
-            
-            if price_element:
-                price_text = price_element.text.strip()
-                match = re.search(r'(\d+\.\d+)', price_text)
-                if match:
-                    price = float(match.group(1))
-                    return price
-            else:
-                # 如果所有选择器都失败，尝试使用更通用的方法
-                all_price_elements = soup.select('p.font12.color666')
-                for element in all_price_elements:
-                    price_text = element.text.strip()
-                    match = re.search(r'(\d+\.\d+)', price_text)
-                    if match:
-                        price = float(match.group(1))
-                        return price
+                # 直接失败
+                preview = (response.text or '')[:200].replace('\n', ' ')
+                _dlog(f"no match; preview='{preview}' -> return 0.000")
+                return 0.0
+
+            price_text = price_element.get_text(strip=True)
+            _dlog(f"matched text='{price_text[:80]}'")
+            m = re.search(r'(\d+(?:\.\d+)?)', price_text)
+            if not m:
+                _dlog("no number in matched text -> return 0.000")
+                return 0.0
+            return float(m.group(1))
         except Exception as e:
-            pass
-        
-        # 价格获取失败时返回0
-        return 0.0
+            _dlog(f"exception for {url}: {e}; return 0.000")
+            return 0.0
 
 
 class PriceMonitorTab(QWidget):

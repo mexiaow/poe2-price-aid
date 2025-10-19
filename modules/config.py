@@ -89,10 +89,10 @@ class Config:
     
     # 默认价格
     DEFAULT_PRICES = {
-        "divine": 9.0,    # 神圣石默认价格
-        "exalted": 1.0,   # 崇高石默认价格
-        "chaos": 0.1,     # 混沌石默认价格
-        "chance": 0.05,   # 机会石默认价格
+        "divine": 0.0,    # 神圣石默认价格
+        "exalted": 0.0,   # 崇高石默认价格
+        "chaos": 0.0,     # 混沌石默认价格
+        "chance": 0.0,    # 机会石默认价格
     }
     
     # 自动喝药相关配置

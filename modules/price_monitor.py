@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 
 from modules.config import Config
+from modules.price_sources import parse_dd373, parse_7881, parse_uu898
 
 
 # 调试开关：
@@ -48,11 +49,28 @@ class PriceScraper(QThread):
     
     def __init__(self):
         super().__init__()
-        self.urls = {
-            "divine": "https://www.dd373.com/s-bcntax-c-n80v8p-h32hgr-5g0bqf.html",
-            "exalted": "https://www.dd373.com/s-bcntax-c-bkfnrd-h32hgr-5g0bqf.html",
-            "chaos": "https://www.dd373.com/s-bcntax-c-mxgtdd-h32hgr-5g0bqf.html",
-            "chance": "https://www.dd373.com/s-bcntax-c-apww35-h32hgr-5g0bqf.html"
+        # 每种货币的价格来源，按优先级：DD373 → UU898 → 7881
+        self.currency_sources = {
+            "divine": [
+                ("dd373", "https://www.dd373.com/s-bcntax-c-n80v8p-h32hgr-5g0bqf.html"),
+                ("uu898", "https://www.uu898.com/newTrade-1724-c1366-4745-s73014/"),
+                ("7881",  "https://search.7881.com/G6186-100001-G6186P002-G6186P002001-0.html?pageNum=1")
+            ],
+            "exalted": [
+                ("dd373", "https://www.dd373.com/s-bcntax-c-bkfnrd-h32hgr-5g0bqf.html"),
+                ("uu898", "https://www.uu898.com/newTrade-1724-c1367-4745-s73014/"),
+                ("7881",  "https://search.7881.com/G6186-100026-G6186P002-G6186P002001-0.html?pageNum=1")
+            ],
+            "chaos": [
+                ("dd373", "https://www.dd373.com/s-bcntax-c-mxgtdd-h32hgr-5g0bqf.html"),
+                ("uu898", "https://www.uu898.com/newTrade-1724-c1368-4745-s73014/"),
+                ("7881",  "https://search.7881.com/G6186-100087-G6186P002-G6186P002001-0.html?pageNum=1")
+            ],
+            "chance": [
+                ("dd373", "https://www.dd373.com/s-bcntax-c-apww35-h32hgr-5g0bqf.html"),
+                ("uu898", "https://www.uu898.com/newTrade-1724-c1376-4745-s73014/"),
+                ("7881",  "https://search.7881.com/G6186-100110-G6186P002-G6186P002001-0.html?pageNum=1")
+            ],
         }
         
     def run(self):
@@ -60,13 +78,13 @@ class PriceScraper(QThread):
         try:
             _dlog("start price refresh with 4 workers (0/50/100/150ms stagger)")
             # 受控并发为4；为每个请求增加微小错峰（0/50/100/150ms），降低瞬时并发尖峰
-            items = list(self.urls.items())
+            items = list(self.currency_sources.items())
             with ThreadPoolExecutor(max_workers=4) as executor:
                 futures = {}
-                for i, (currency, url) in enumerate(items):
+                for i, (currency, sources) in enumerate(items):
                     delay_ms = i * 50  # 每个请求递增 50ms 的轻微延迟
-                    # 注意：不共享 Session 到多线程，避免线程安全问题；每个任务各自请求
-                    futures[executor.submit(self._get_price_with_delay, url, delay_ms)] = currency
+                    # 注意：不共享 Session；每个任务自行尝试多来源
+                    futures[executor.submit(self._get_currency_price_with_delay, currency, sources, delay_ms)] = currency
                 for future in as_completed(futures):
                     currency = futures.get(future)
                     try:
@@ -81,55 +99,65 @@ class PriceScraper(QThread):
         except Exception:
             pass
 
-    def _get_price_with_delay(self, url, delay_ms=0):
-        """在请求前增加轻微延迟以错峰，单位毫秒；每个任务独立请求，避免共享会话"""
+    def _get_currency_price_with_delay(self, currency, sources, delay_ms=0):
+        """在请求前增加轻微延迟；按优先级依次尝试来源，成功即返回价格，失败返回0.0"""
         try:
             if delay_ms and delay_ms > 0:
                 time.sleep(delay_ms / 1000.0)
         except Exception:
             pass
-        # 使用 requests.get（每次调用内部自建会话），是线程安全的
-        return self.get_price(url)
-    
-    def get_price(self, url, session=None):
-        """使用单一解析路径：获取第二个商品的价格；失败直接返回 0.000"""
+        for site, url in sources:
+            price = self.get_price_from_site(site, url)
+            _dlog(f"try {currency}@{site} => {price}")
+            if price > 0:
+                return price
+        return 0.0
+
+    def _fetch_html(self, url):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Referer': url.split('/')[0] + '//' + url.split('/')[2] if '//' in url else ''
+        }
+        resp = requests.get(url, headers=headers, timeout=8)
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'zh-CN,zh;q=0.9',
-                'Referer': 'https://www.dd373.com/'
+            enc = (resp.encoding or '').lower()
+            if not enc or enc == 'iso-8859-1':
+                resp.encoding = getattr(resp, 'apparent_encoding', None) or 'utf-8'
+        except Exception:
+            pass
+        _dlog(f"GET {url} status={getattr(resp, 'status_code', 'NA')} len={len(getattr(resp, 'text', '') or '')} enc={getattr(resp, 'encoding', 'NA')}")
+        return resp.text or ""
+
+    def get_price_from_site(self, site, url):
+        """按站点解析价格：失败返回0.0（不做多轮重试）"""
+        try:
+            html = self._fetch_html(url)
+            if not html:
+                return 0.0
+            soup = BeautifulSoup(html, 'html.parser')
+            parser_map = {
+                'dd373': parse_dd373,
+                '7881': parse_7881,
+                'uu898': parse_uu898,
             }
-            client = session or requests
-            response = client.get(url, headers=headers, timeout=8)
-            # 纠正编码，避免解析失败
-            try:
-                enc = (response.encoding or '').lower()
-                if not enc or enc == 'iso-8859-1':
-                    response.encoding = getattr(response, 'apparent_encoding', None) or 'utf-8'
-            except Exception:
-                pass
-            _dlog(f"GET {url} status={getattr(response, 'status_code', 'NA')} len={len(getattr(response, 'text', '') or '')} enc={getattr(response, 'encoding', 'NA')}")
-            soup = BeautifulSoup(response.text, 'html.parser')
-
-            # 单一路径：第二个商品价格位置
-            price_element = soup.select_one('div.good-list-box div:nth-child(2) div.p-r66 p.font12.color666.m-t5')
-            if not price_element:
-                # 直接失败
-                preview = (response.text or '')[:200].replace('\n', ' ')
-                _dlog(f"no match; preview='{preview}' -> return 0.000")
+            parser = parser_map.get(site)
+            if not parser:
                 return 0.0
-
-            price_text = price_element.get_text(strip=True)
-            _dlog(f"matched text='{price_text[:80]}'")
-            m = re.search(r'(\d+(?:\.\d+)?)', price_text)
-            if not m:
-                _dlog("no number in matched text -> return 0.000")
+            price = float(parser(soup, html) or 0.0)
+            if price <= 0:
+                _dlog(f"{site} no match; preview='{(html[:200] or '').replace('\n',' ')}'")
                 return 0.0
-            return float(m.group(1))
+            _dlog(f"{site} price={price}")
+            return price
         except Exception as e:
-            _dlog(f"exception for {url}: {e}; return 0.000")
+            _dlog(f"{site} exception: {e}")
             return 0.0
+    
+    # 兼容旧接口（不再直接使用）
+    def get_price(self, url, session=None):
+        return self.get_price_from_site('dd373', url)
 
 
 class PriceMonitorTab(QWidget):
